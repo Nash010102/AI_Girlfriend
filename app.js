@@ -588,6 +588,134 @@ function getAIGiftSuggestions(occasion = "random", budget = 100) {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SECTION 3B: EXPORT / IMPORT
+// ─────────────────────────────────────────────────────────────────────────────
+
+function exportAllData() {
+  const data = {
+    _export: 'Project Mochi Backup',
+    _date: new Date().toISOString(),
+    profile: getData('mochi_profile', null),
+    dates: getData('mochi_dates', []),
+    budget: getData('mochi_budget', null),
+    gifts: getData('mochi_gifts', []),
+    reminders: getData('mochi_reminders', [])
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `mochi-backup-${todayStr()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Data exported! 📦');
+}
+
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data._export || data._export !== 'Project Mochi Backup') {
+        showToast('Invalid backup file', 'error');
+        return;
+      }
+      if (data.profile) setData('mochi_profile', data.profile);
+      if (data.dates) setData('mochi_dates', data.dates);
+      if (data.budget) setData('mochi_budget', data.budget);
+      if (data.gifts) setData('mochi_gifts', data.gifts);
+      if (data.reminders) setData('mochi_reminders', data.reminders);
+      showToast('Data imported! Refreshing... ✅');
+      setTimeout(() => {
+        updateSidebarName();
+        switchTab('dashboard');
+      }, 500);
+    } catch {
+      showToast('Error reading file', 'error');
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION 3C: RELATIONSHIP INSIGHTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+function getRelationshipInsights() {
+  const dates = getDates();
+  const profile = getProfile();
+  const reminders = getReminders();
+
+  // Date frequency (dates per month)
+  let dateFrequency = 0;
+  if (dates.length >= 2) {
+    const sortedDates = [...dates].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    const first = new Date(sortedDates[0].date + 'T00:00:00');
+    const last = new Date(sortedDates[sortedDates.length - 1].date + 'T00:00:00');
+    const months = Math.max(1, (last - first) / (1000 * 60 * 60 * 24 * 30));
+    dateFrequency = dates.length / months;
+  }
+
+  // Average rating
+  const avgRating = dates.length > 0
+    ? dates.reduce((s, d) => s + (d.rating || 0), 0) / dates.length
+    : 0;
+
+  // Streak: consecutive weeks with at least one date
+  let streak = 0;
+  if (dates.length > 0) {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const weekStart = new Date(now);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    let checkWeek = new Date(weekStart);
+    for (let i = 0; i < 52; i++) {
+      const weekEnd = new Date(checkWeek);
+      weekEnd.setDate(weekEnd.getDate() + 7);
+      const hasDate = dates.some(d => {
+        const dd = new Date(d.date + 'T00:00:00');
+        return dd >= checkWeek && dd < weekEnd;
+      });
+      if (hasDate) {
+        streak++;
+        checkWeek.setDate(checkWeek.getDate() - 7);
+      } else {
+        break;
+      }
+    }
+  }
+
+  // Her top rated date types
+  const typeRatings = {};
+  dates.forEach(d => {
+    if (!typeRatings[d.type]) typeRatings[d.type] = { sum: 0, count: 0 };
+    typeRatings[d.type].sum += (d.rating || 0);
+    typeRatings[d.type].count++;
+  });
+  const topTypes = Object.entries(typeRatings)
+    .map(([type, data]) => ({ type, avg: data.sum / data.count }))
+    .sort((a, b) => b.avg - a.avg)
+    .slice(0, 3);
+
+  // Relationship health score (0-100)
+  let health = 50; // base
+  if (dateFrequency >= 4) health += 15;
+  else if (dateFrequency >= 2) health += 10;
+  else if (dateFrequency >= 1) health += 5;
+  if (avgRating >= 8) health += 15;
+  else if (avgRating >= 6) health += 10;
+  else if (avgRating >= 4) health += 5;
+  if (streak >= 4) health += 10;
+  else if (streak >= 2) health += 5;
+  if (profile.name) health += 5;
+  if (reminders.length >= 2) health += 5;
+  health = Math.min(100, Math.max(0, health));
+
+  return { dateFrequency, avgRating, streak, topTypes, health };
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SECTION 4: UI HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -625,7 +753,11 @@ let currentModalSaveHandler = null;
 function openModal(title, bodyHTML, onSave) {
   document.getElementById('modal-title').textContent = title;
   document.getElementById('modal-body').innerHTML = bodyHTML;
-  document.getElementById('modal-overlay').classList.remove('hidden');
+  const overlay = document.getElementById('modal-overlay');
+  overlay.classList.remove('hidden');
+  // Force reflow then add active for smooth animation
+  void overlay.offsetHeight;
+  overlay.classList.add('active');
 
   // Remove old save handler if any
   const saveBtn = document.getElementById('modal-save');
@@ -637,8 +769,13 @@ function openModal(title, bodyHTML, onSave) {
 }
 
 function closeModal() {
-  document.getElementById('modal-overlay').classList.add('hidden');
-  document.getElementById('modal-body').innerHTML = '';
+  const overlay = document.getElementById('modal-overlay');
+  overlay.classList.remove('active');
+  // Wait for CSS transition to complete before fully hiding
+  setTimeout(() => {
+    overlay.classList.add('hidden');
+    document.getElementById('modal-body').innerHTML = '';
+  }, 220);
 
   const saveBtn = document.getElementById('modal-save');
   if (currentModalSaveHandler) {
@@ -858,6 +995,42 @@ function renderDashboard() {
     `;
   }
 
+  // Relationship insights
+  const insights = getRelationshipInsights();
+  const insightsEl = document.getElementById('dash-insights');
+  const healthColor = insights.health >= 75 ? '#4caf50' : insights.health >= 50 ? '#ff9800' : '#f44336';
+  const healthLabel = insights.health >= 80 ? '💖 Thriving!' : insights.health >= 60 ? '💕 Doing Well' : insights.health >= 40 ? '💛 Room to Grow' : '💪 Just Getting Started';
+
+  insightsEl.innerHTML = `
+    <h3>Relationship Insights 📊</h3>
+    <div class="grid-4 gap-sm" style="margin-bottom: 16px;">
+      <div style="text-align:center; padding: 12px; background: #f8f0f4; border-radius: 10px;">
+        <span style="font-size: 1.6rem; font-weight: 700; color: ${healthColor}; display: block;">${insights.health}%</span>
+        <small style="color:#666;">${healthLabel}</small>
+      </div>
+      <div style="text-align:center; padding: 12px; background: #f8f0f4; border-radius: 10px;">
+        <span style="font-size: 1.6rem; font-weight: 700; color: #e91e63; display: block;">${insights.dateFrequency.toFixed(1)}</span>
+        <small style="color:#666;">Dates / Month</small>
+      </div>
+      <div style="text-align:center; padding: 12px; background: #f8f0f4; border-radius: 10px;">
+        <span style="font-size: 1.6rem; font-weight: 700; color: #9c27b0; display: block;">🔥 ${insights.streak}</span>
+        <small style="color:#666;">Week Streak</small>
+      </div>
+      <div style="text-align:center; padding: 12px; background: #f8f0f4; border-radius: 10px;">
+        <span style="font-size: 1.6rem; font-weight: 700; color: #ff9800; display: block;">${insights.avgRating ? insights.avgRating.toFixed(1) + '/10' : '—'}</span>
+        <small style="color:#666;">Avg Happiness</small>
+      </div>
+    </div>
+    ${insights.topTypes.length > 0 ? `
+      <div style="background: #f8f0f4; padding: 12px 16px; border-radius: 10px;">
+        <small style="color:#888; font-weight:600;">HER FAVORITE DATE TYPES:</small>
+        <div class="flex gap-sm flex-wrap" style="margin-top: 6px;">
+          ${insights.topTypes.map(t => `<span class="badge" style="font-size: 0.8rem;">${TYPE_LABELS[t.type] || t.type} (${t.avg.toFixed(1)}⭐)</span>`).join('')}
+        </div>
+      </div>
+    ` : ''}
+  `;
+
   // Upcoming reminders
   const remEl = document.getElementById('dash-reminders');
   if (allUpcoming.length === 0) {
@@ -1060,20 +1233,59 @@ function setupProfileEventHandlers() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function renderDates() {
-  const dates = getDates();
+  const allDates = getDates();
 
-  // Stats
+  // Populate type filter dropdown
+  const typeFilter = document.getElementById('dates-filter-type');
+  if (typeFilter && typeFilter.options.length <= 1) {
+    Object.entries(TYPE_LABELS).forEach(([val, lbl]) => {
+      const opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = lbl;
+      typeFilter.appendChild(opt);
+    });
+  }
+
+  // Setup filter listeners (once)
+  const searchInput = document.getElementById('dates-search');
+  const ratingFilter = document.getElementById('dates-filter-rating');
+  [searchInput, typeFilter, ratingFilter].forEach(el => {
+    if (el && !el._mochiListenerAdded) {
+      el.addEventListener('input', () => renderDates());
+      el.addEventListener('change', () => renderDates());
+      el._mochiListenerAdded = true;
+    }
+  });
+
+  // Apply filters
+  const searchTerm = (searchInput ? searchInput.value : '').toLowerCase();
+  const typeVal = typeFilter ? typeFilter.value : '';
+  const ratingVal = ratingFilter ? ratingFilter.value : '';
+
+  const dates = allDates.filter(d => {
+    if (searchTerm) {
+      const haystack = [d.location, d.notes, ...(d.tags || [])].join(' ').toLowerCase();
+      if (!haystack.includes(searchTerm)) return false;
+    }
+    if (typeVal && d.type !== typeVal) return false;
+    if (ratingVal === 'high' && (d.rating || 0) < 8) return false;
+    if (ratingVal === 'mid' && ((d.rating || 0) < 5 || (d.rating || 0) > 7)) return false;
+    if (ratingVal === 'low' && (d.rating || 0) > 4) return false;
+    return true;
+  });
+
+  // Stats (use all dates for stats, not filtered)
   const statsEl = document.getElementById('dates-stats');
-  const totalDates = dates.length;
+  const totalDates = allDates.length;
   const avgRating = totalDates > 0
-    ? (dates.reduce((s, d) => s + (d.rating || 0), 0) / totalDates).toFixed(1)
+    ? (allDates.reduce((s, d) => s + (d.rating || 0), 0) / totalDates).toFixed(1)
     : "—";
 
   // Most common type
   let mostCommonType = "—";
   if (totalDates > 0) {
     const typeCounts = {};
-    dates.forEach(d => { typeCounts[d.type] = (typeCounts[d.type] || 0) + 1; });
+    allDates.forEach(d => { typeCounts[d.type] = (typeCounts[d.type] || 0) + 1; });
     mostCommonType = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0][0];
     mostCommonType = TYPE_LABELS[mostCommonType] || mostCommonType;
   }
@@ -1098,12 +1310,22 @@ function renderDates() {
 
   // Date cards
   const listEl = document.getElementById('dates-list');
-  if (dates.length === 0) {
+  if (allDates.length === 0) {
     listEl.innerHTML = `
       <div class="empty-state card">
         <p style="font-size:2rem;">📅</p>
         <p>No dates logged yet!</p>
         <p><small>Click "Log a Date" to record your first date together.</small></p>
+      </div>
+    `;
+    return;
+  }
+  if (dates.length === 0) {
+    listEl.innerHTML = `
+      <div class="empty-state card">
+        <p style="font-size:2rem;">🔍</p>
+        <p>No dates match your filters</p>
+        <p><small>Try adjusting your search or filters.</small></p>
       </div>
     `;
     return;
@@ -1859,6 +2081,40 @@ function setupGlobalEventHandlers() {
 
   // Reminders — add reminder
   document.getElementById('btn-add-reminder').addEventListener('click', () => openReminderModal());
+
+  // Data tools
+  const exportBtn = document.getElementById('btn-export-data');
+  if (exportBtn) exportBtn.addEventListener('click', exportAllData);
+
+  const importInput = document.getElementById('input-import-data');
+  if (importInput) {
+    importInput.addEventListener('change', (e) => {
+      if (e.target.files[0]) {
+        if (confirm('This will merge imported data with your current data. Continue?')) {
+          importData(e.target.files[0]);
+        }
+        e.target.value = '';
+      }
+    });
+  }
+
+  const clearBtn = document.getElementById('btn-clear-data');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      if (confirm('⚠️ This will permanently delete ALL your data. Are you sure?')) {
+        if (confirm('Really? This cannot be undone!')) {
+          localStorage.removeItem('mochi_profile');
+          localStorage.removeItem('mochi_dates');
+          localStorage.removeItem('mochi_budget');
+          localStorage.removeItem('mochi_gifts');
+          localStorage.removeItem('mochi_reminders');
+          showToast('All data cleared. Starting fresh! 🌱');
+          updateSidebarName();
+          switchTab('dashboard');
+        }
+      }
+    });
+  }
 }
 
 
@@ -1881,6 +2137,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Setup all global event handlers
   setupGlobalEventHandlers();
+
+  // Mobile menu
+  const mobileBtn = document.getElementById('mobile-menu-btn');
+  const sidebar = document.getElementById('sidebar');
+  const mobileOverlay = document.getElementById('mobile-overlay');
+
+  function closeMobileMenu() {
+    sidebar.classList.remove('mobile-open');
+    mobileOverlay.classList.remove('active');
+  }
+
+  if (mobileBtn) {
+    mobileBtn.addEventListener('click', () => {
+      sidebar.classList.toggle('mobile-open');
+      mobileOverlay.classList.toggle('active');
+    });
+  }
+  if (mobileOverlay) {
+    mobileOverlay.addEventListener('click', closeMobileMenu);
+  }
+  // Close mobile menu on nav click
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.addEventListener('click', closeMobileMenu);
+  });
 
   // Render initial view
   updateSidebarName();
