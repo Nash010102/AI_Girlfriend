@@ -38,6 +38,9 @@
       </nav>
     </aside>
 
+    <!-- Mobile Menu Toggle -->
+    <button id="mobile-menu-btn" class="mobile-menu-btn" aria-label="Toggle menu">☰</button>
+
     <!-- ─────────────────────────────────────── -->
     <!-- Main Content                             -->
     <!-- ─────────────────────────────────────── -->
@@ -75,6 +78,25 @@
         <!-- Upcoming Reminders -->
         <div id="dash-reminders" class="card">
           <h3>Upcoming Reminders</h3>
+        </div>
+
+        <!-- Relationship Insights -->
+        <div id="dash-insights" class="card mb-md">
+          <h3>Relationship Insights 📊</h3>
+        </div>
+
+        <!-- Data Tools -->
+        <div class="card">
+          <h3>Data Tools 🔧</h3>
+          <p style="color:#666; margin-bottom: 12px;">Backup and restore your Mochi data</p>
+          <div class="flex gap-sm flex-wrap">
+            <button id="btn-export-data" class="btn btn-secondary">📦 Export Data</button>
+            <label class="btn btn-secondary" style="cursor:pointer;">
+              📥 Import Data
+              <input type="file" id="input-import-data" accept=".json" style="display:none;">
+            </label>
+            <button id="btn-clear-data" class="btn btn-danger btn-sm">🗑️ Reset All Data</button>
+          </div>
         </div>
       </section>
 
@@ -256,6 +278,22 @@
         <!-- Date Statistics -->
         <div id="dates-stats" class="grid-3 mb-md"></div>
 
+        <!-- Search & Filter -->
+        <div class="card mb-md">
+          <div class="flex gap-sm flex-wrap" style="align-items: center;">
+            <input type="text" id="dates-search" placeholder="🔍 Search dates..." style="flex: 1; min-width: 200px;" autocomplete="off">
+            <select id="dates-filter-type" style="min-width: 140px;">
+              <option value="">All Types</option>
+            </select>
+            <select id="dates-filter-rating" style="min-width: 140px;">
+              <option value="">All Ratings</option>
+              <option value="high">⭐ 8-10 (Amazing)</option>
+              <option value="mid">⭐ 5-7 (Good)</option>
+              <option value="low">⭐ 1-4 (Meh)</option>
+            </select>
+          </div>
+        </div>
+
         <!-- Date Cards List -->
         <div id="dates-list"></div>
       </section>
@@ -375,6 +413,9 @@
 
     </main>
   </div>
+
+  <!-- Mobile Sidebar Overlay -->
+  <div id="mobile-overlay" class="mobile-overlay"></div>
 
   <!-- ═══════════════════════════════════════════ -->
   <!-- Modal Overlay                               -->
