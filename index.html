@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Mochi 🍡 — AI Relationship Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- App Shell                                   -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div id="app">
+
+    <!-- ─────────────────────────────────────── -->
+    <!-- Sidebar                                  -->
+    <!-- ─────────────────────────────────────── -->
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <span class="logo" aria-hidden="true">🍡</span>
+        <h1>Project Mochi</h1>
+        <span id="sidebar-partner-name" class="partner-name"></span>
+      </div>
+
+      <nav id="nav-menu">
+        <button class="nav-item active" data-tab="dashboard">🏠 Dashboard</button>
+        <button class="nav-item" data-tab="profile">💝 Profile</button>
+        <button class="nav-item" data-tab="dates">📅 Date Log</button>
+        <button class="nav-item" data-tab="suggestions">💡 Suggestions</button>
+        <button class="nav-item" data-tab="budget">💰 Budget</button>
+        <button class="nav-item" data-tab="gifts">🎁 Gifts</button>
+        <button class="nav-item" data-tab="surprises">✨ Surprises</button>
+        <button class="nav-item" data-tab="reminders">🔔 Reminders</button>
+      </nav>
+    </aside>
+
+    <!-- ─────────────────────────────────────── -->
+    <!-- Main Content                             -->
+    <!-- ─────────────────────────────────────── -->
+    <main id="main-content">
+
+      <!-- ═════════════════════════════════════ -->
+      <!-- Section: Dashboard                    -->
+      <!-- ═════════════════════════════════════ -->
+      <section id="section-dashboard" class="section active">
+        <div class="section-header">
+          <div>
+            <h2>Dashboard</h2>
+            <p>Your relationship at a glance</p>
+          </div>
+        </div>
+
+        <!-- Stat Cards Row -->
+        <div id="dash-stats" class="grid-4 mb-md"></div>
+
+        <!-- Middle Row: Suggestions + Budget Summary -->
+        <div class="flex gap-md mb-md">
+          <div id="dash-suggestions" class="card" style="flex:3">
+            <h3>Top Date Ideas</h3>
+          </div>
+          <div id="dash-budget-summary" class="card" style="flex:2">
+            <h3>Budget This Month</h3>
+          </div>
+        </div>
+
+        <!-- Recent Dates -->
+        <div id="dash-recent" class="card mb-md">
+          <h3>Recent Dates</h3>
+        </div>
+
+        <!-- Upcoming Reminders -->
+        <div id="dash-reminders" class="card">
+          <h3>Upcoming Reminders</h3>
+        </div>
+      </section>
+
+      <!-- ═════════════════════════════════════ -->
+      <!-- Section: Profile                      -->
+      <!-- ═════════════════════════════════════ -->
+      <section id="section-profile" class="section">
+        <div class="section-header">
+          <div>
+            <h2>Her Profile 💝</h2>
+            <p>Everything about her in one place</p>
+          </div>
+        </div>
+
+        <!-- Profile Form -->
+        <form id="profile-form" class="card mb-md">
+          <!-- Row 1: Name + Birthday -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="input-name">Name</label>
+              <input type="text" id="input-name" placeholder="e.g. Sarah" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label for="input-birthday">Birthday</label>
+              <input type="date" id="input-birthday">
+            </div>
+          </div>
+
+          <!-- Row 2: Love Language + Introvert Level -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="input-love-language">Love Language</label>
+              <select id="input-love-language">
+                <option value="quality-time">Quality Time</option>
+                <option value="words">Words of Affirmation</option>
+                <option value="acts">Acts of Service</option>
+                <option value="gifts">Receiving Gifts</option>
+                <option value="touch">Physical Touch</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="input-introvert">Introvert Level: <span id="introvert-value">5</span>/10</label>
+              <input type="range" id="input-introvert" min="1" max="10" value="5">
+            </div>
+          </div>
+
+          <!-- Row 3: Budget Comfort -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="input-budget-comfort">Budget Comfort</label>
+              <select id="input-budget-comfort">
+                <option value="low">Low — Keep it simple</option>
+                <option value="medium" selected>Medium — Balanced</option>
+                <option value="high">High — Go all out</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Save Button -->
+          <button type="button" id="btn-save-profile" class="btn btn-primary">Save Profile</button>
+        </form>
+
+        <!-- Things She Loves -->
+        <div class="card mb-md">
+          <h3>Things She Loves 💕</h3>
+
+          <!-- Food Likes -->
+          <h4>Food</h4>
+          <div class="tag-container" id="profile-likes-food"></div>
+          <div class="tag-input-group">
+            <input type="text" id="input-like-food" placeholder="e.g. sushi" autocomplete="off">
+            <button type="button" class="btn btn-sm btn-primary" data-target="likes-food">Add</button>
+          </div>
+
+          <!-- Activity Likes -->
+          <h4>Activities</h4>
+          <div class="tag-container" id="profile-likes-activities"></div>
+          <div class="tag-input-group">
+            <input type="text" id="input-like-activity" placeholder="e.g. arcades" autocomplete="off">
+            <button type="button" class="btn btn-sm btn-primary" data-target="likes-activities">Add</button>
+          </div>
+
+          <!-- Aesthetic Likes -->
+          <h4>Aesthetic</h4>
+          <div class="tag-container" id="profile-likes-aesthetic"></div>
+          <div class="tag-input-group">
+            <input type="text" id="input-like-aesthetic" placeholder="e.g. pastel colors" autocomplete="off">
+            <button type="button" class="btn btn-sm btn-primary" data-target="likes-aesthetic">Add</button>
+          </div>
+        </div>
+
+        <!-- Things She Dislikes -->
+        <div class="card mb-md">
+          <h3>Things She Dislikes 😣</h3>
+
+          <!-- Food Dislikes -->
+          <h4>Food</h4>
+          <div class="tag-container" id="profile-dislikes-food"></div>
+          <div class="tag-input-group">
+            <input type="text" id="input-dislike-food" placeholder="e.g. spicy food" autocomplete="off">
+            <button type="button" class="btn btn-sm btn-primary" data-target="dislikes-food">Add</button>
+          </div>
+
+          <!-- Activity Dislikes -->
+          <h4>Activities</h4>
+          <div class="tag-container" id="profile-dislikes-activities"></div>
+          <div class="tag-input-group">
+            <input type="text" id="input-dislike-activity" placeholder="e.g. crowded places" autocomplete="off">
+            <button type="button" class="btn btn-sm btn-primary" data-target="dislikes-activities">Add</button>
+          </div>
+        </div>
+
+        <!-- Emotional Triggers -->
+        <div class="card mb-md">
+          <h3>Emotional Triggers 🫂</h3>
+
+          <!-- Makes Her Happy -->
+          <h4>Makes Her Happy</h4>
+          <div class="tag-container" id="profile-happy"></div>
+          <div class="tag-input-group">
+            <input type="text" id="input-happy" placeholder="e.g. surprise gifts" autocomplete="off">
+            <button type="button" class="btn btn-sm btn-primary" data-target="happy">Add</button>
+          </div>
+
+          <!-- Stresses Her Out -->
+          <h4>Stresses Her Out</h4>
+          <div class="tag-container" id="profile-stress"></div>
+          <div class="tag-input-group">
+            <input type="text" id="input-stress" placeholder="e.g. work deadlines" autocomplete="off">
+            <button type="button" class="btn btn-sm btn-primary" data-target="stress">Add</button>
+          </div>
+
+          <!-- Comfort Things -->
+          <h4>Comfort Things</h4>
+          <div class="tag-container" id="profile-comfort"></div>
+          <div class="tag-input-group">
+            <input type="text" id="input-comfort" placeholder="e.g. matcha latte" autocomplete="off">
+            <button type="button" class="btn btn-sm btn-primary" data-target="comfort">Add</button>
+          </div>
+        </div>
+
+        <!-- Special Dates -->
+        <div class="card mb-md">
+          <h3>Special Dates 💫</h3>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="input-anniversary">Anniversary</label>
+              <input type="date" id="input-anniversary">
+            </div>
+            <div class="form-group">
+              <label for="input-first-date">First Date</label>
+              <input type="date" id="input-first-date">
+            </div>
+          </div>
+
+          <h4>Memorable Events</h4>
+          <div class="tag-container" id="profile-memorable"></div>
+          <div class="tag-input-group">
+            <input type="text" id="input-memorable-label" placeholder="e.g. First Trip" autocomplete="off">
+            <input type="date" id="input-memorable-date">
+            <button type="button" id="btn-add-memorable" class="btn btn-sm btn-primary">Add</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═════════════════════════════════════ -->
+      <!-- Section: Date Log                     -->
+      <!-- ═════════════════════════════════════ -->
+      <section id="section-dates" class="section">
+        <div class="section-header">
+          <div>
+            <h2>Date Log 📅</h2>
+            <p>Record and remember every moment</p>
+          </div>
+          <button id="btn-add-date" class="btn btn-primary" aria-label="Log a new date">＋ Log a Date</button>
+        </div>
+
+        <!-- Date Statistics -->
+        <div id="dates-stats" class="grid-3 mb-md"></div>
+
+        <!-- Date Cards List -->
+        <div id="dates-list"></div>
+      </section>
+
+      <!-- ═════════════════════════════════════ -->
+      <!-- Section: AI Suggestions               -->
+      <!-- ═════════════════════════════════════ -->
+      <section id="section-suggestions" class="section">
+        <div class="section-header">
+          <div>
+            <h2>AI Suggestions 💡</h2>
+            <p>Ranked by compatibility score</p>
+          </div>
+          <button id="btn-refresh-suggestions" class="btn btn-primary" aria-label="Refresh suggestions">🔄 Refresh</button>
+        </div>
+
+        <!-- Info Box -->
+        <div class="card mb-md">
+          <p><strong>How scoring works:</strong> Each suggestion is scored using the formula:
+            <em>Score = (Like Match × 0.4) + (Budget Fit × 0.3) + (Past Success × 0.2) + (Novelty × 0.1)</em>.
+            We match her preferences, check your budget, review past date ratings, and boost fresh ideas.</p>
+        </div>
+
+        <!-- Suggestion Cards -->
+        <div id="suggestions-list"></div>
+      </section>
+
+      <!-- ═════════════════════════════════════ -->
+      <!-- Section: Budget Tracker               -->
+      <!-- ═════════════════════════════════════ -->
+      <section id="section-budget" class="section">
+        <div class="section-header">
+          <div>
+            <h2>Budget Tracker 💰</h2>
+            <p>Keep your spending in check</p>
+          </div>
+          <button id="btn-add-expense" class="btn btn-primary" aria-label="Add a new expense">＋ Add Expense</button>
+        </div>
+
+        <!-- Budget Overview Stats -->
+        <div id="budget-overview" class="grid-3 mb-md"></div>
+
+        <!-- Budget Progress Chart -->
+        <div id="budget-chart" class="card mb-md"></div>
+
+        <!-- Recent Expenses -->
+        <div id="budget-expenses" class="card">
+          <h3>Recent Expenses</h3>
+        </div>
+      </section>
+
+      <!-- ═════════════════════════════════════ -->
+      <!-- Section: Gift Ideas                   -->
+      <!-- ═════════════════════════════════════ -->
+      <section id="section-gifts" class="section">
+        <div class="section-header">
+          <div>
+            <h2>Gift Ideas 🎁</h2>
+            <p>Find the perfect gift every time</p>
+          </div>
+          <button id="btn-add-gift" class="btn btn-primary" aria-label="Add a new gift idea">＋ Add Gift</button>
+        </div>
+
+        <!-- AI Suggested Gifts -->
+        <div id="gifts-ai" class="card mb-md">
+          <h3>AI Suggested Gifts 🤖</h3>
+        </div>
+
+        <!-- User Gift List -->
+        <div id="gifts-list" class="card">
+          <h3>Your Gift List</h3>
+        </div>
+      </section>
+
+      <!-- ═════════════════════════════════════ -->
+      <!-- Section: Surprise Generator           -->
+      <!-- ═════════════════════════════════════ -->
+      <section id="section-surprises" class="section">
+        <div class="section-header">
+          <div>
+            <h2>Surprise Generator ✨</h2>
+            <p>Let Mochi plan a surprise for her</p>
+          </div>
+        </div>
+
+        <!-- Generate Button -->
+        <div class="text-center mb-lg">
+          <button id="btn-generate-surprise" class="btn btn-primary btn-lg" aria-label="Generate a surprise plan">🎲 Generate Surprise Plan</button>
+        </div>
+
+        <!-- Surprise Output -->
+        <div id="surprises-output"></div>
+      </section>
+
+      <!-- ═════════════════════════════════════ -->
+      <!-- Section: Reminders                    -->
+      <!-- ═════════════════════════════════════ -->
+      <section id="section-reminders" class="section">
+        <div class="section-header">
+          <div>
+            <h2>Reminders 🔔</h2>
+            <p>Never forget an important moment</p>
+          </div>
+          <button id="btn-add-reminder" class="btn btn-primary" aria-label="Add a new reminder">＋ Add Reminder</button>
+        </div>
+
+        <!-- Upcoming Reminders -->
+        <div id="reminders-upcoming" class="card mb-md">
+          <h3>Upcoming</h3>
+        </div>
+
+        <!-- All Reminders -->
+        <div id="reminders-list" class="card">
+          <h3>All Reminders</h3>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- Modal Overlay                               -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div id="modal" class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title"></h3>
+        <button id="modal-close" class="btn btn-sm" aria-label="Close modal">✕</button>
+      </div>
+      <div id="modal-body" class="modal-body"></div>
+      <div class="modal-footer">
+        <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
+        <button id="modal-save" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- Application Script                          -->
+  <!-- ═══════════════════════════════════════════ -->
+  <script src="app.js"></script>
+</body>
+</html>
