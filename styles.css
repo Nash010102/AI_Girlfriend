@@ -431,6 +431,38 @@ textarea { resize: vertical; }
 .surprise-card p { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 4px; }
 .surprise-attribution { color: var(--text-light); font-size: 0.85rem; margin-bottom: 12px; text-align: center; }
 
+/* Surprise Plan Card (Elaborate) */
+.surprise-plan-card details summary {
+  list-style: none; user-select: none;
+}
+.surprise-plan-card details summary::-webkit-details-marker { display: none; }
+.surprise-plan-card details summary::before { content: "▸ "; font-weight: bold; }
+.surprise-plan-card details[open] summary::before { content: "▾ "; }
+.surprise-plan-card label { user-select: none; }
+
+/* Car Moment Itinerary Highlights */
+.itinerary-item[style*="background:#fff8e1"] {
+  border-radius: 8px; margin: 4px 0;
+}
+.itinerary-item[style*="background:#fce4ec"] {
+  border-radius: 8px; margin: 4px 0;
+}
+
+/* Visit Rating Modal Slider */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 20px; height: 20px;
+  border-radius: 50%; background: var(--primary); cursor: pointer;
+  border: 2px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 3px; background: var(--primary-light);
+}
+
+/* Flow Summary Badge Row */
+.plan-flow-summary .badge {
+  font-size: 0.78rem; padding: 3px 8px;
+}
+
 /* ─────────────────────────────────────────────────────────────
    Toast Notifications
    ───────────────────────────────────────────────────────────── */
