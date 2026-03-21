@@ -410,293 +410,560 @@ function updateLearningFromDate(dateEntry, venues) {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SECTION 4: DATE PLANNING BRAIN 🧠
+// SECTION 4: DATE PLANNING BRAIN 🧠 (Hub-Based Natural Flow)
 // ─────────────────────────────────────────────────────────────────────────────
+// Instead of hopping between different locations for 1 activity each,
+// this planner picks ONE area/mall hub and plans multiple activities there.
+// The flow feels natural: arrive → meal → activity → walk/shop → dessert → drive back → car moments → goodbye
 
-const DATE_TYPES = {
-  quick: { label: "Quick Date (1-2 hrs)", maxVenues: 1, maxTravelMin: 30, timeRange: [60, 120] },
-  short: { label: "Short Date (2-4 hrs)", maxVenues: 2, maxTravelMin: 45, timeRange: [120, 240] },
-  half: { label: "Half Day (4-6 hrs)", maxVenues: 3, maxTravelMin: 60, timeRange: [240, 360] },
-  full: { label: "Full Day (6+ hrs)", maxVenues: 4, maxTravelMin: 90, timeRange: [360, 600] }
+// Areas that are close enough to walk between
+const NEARBY_AREAS = {
+  "mid-valley": ["mid-valley"],
+  "bangsar": ["bangsar"],
+  "bukit-bintang": ["bukit-bintang"],
+  "klcc": ["klcc"],
+  "sunway": ["sunway"],
+  "1-utama": ["1-utama", "ttdi"],
+  "ttdi": ["ttdi", "1-utama"],
+  "damansara": ["damansara", "kota-damansara", "ara-damansara"],
+  "kota-damansara": ["kota-damansara", "damansara"],
+  "ara-damansara": ["ara-damansara", "damansara"],
+  "pj": ["pj", "ss2", "ss15"],
+  "ss2": ["ss2", "pj"],
+  "ss15": ["ss15", "pj"],
+  "sri-hartamas": ["sri-hartamas", "mont-kiara", "desa-park-city", "publika"],
+  "mont-kiara": ["mont-kiara", "sri-hartamas", "publika"],
+  "desa-park-city": ["desa-park-city", "kepong"],
+  "publika": ["publika", "sri-hartamas", "mont-kiara"],
+  "petaling-street": ["petaling-street"],
+  "cheras": ["cheras"],
+  "putrajaya": ["putrajaya"],
+  "sentul": ["sentul"],
+  "seri-kembangan": ["seri-kembangan"],
+  "pavilion": ["pavilion", "bukit-bintang"],
+  "kepong": ["kepong", "desa-park-city"],
+  "nu-sentral": ["nu-sentral"],
+  "the-curve": ["the-curve", "1-utama"]
 };
 
-function generateDatePlans(options) {
-  const {
-    dateType = "short",
-    budget = 100,
-    dayType = "weekend",
-    startTime = "afternoon",
-    herMood = "happy",
-    preferences = []
-  } = options;
+// Car moments — the best part of the drive back
+const CAR_MOMENTS = [
+  {
+    title: "Car Singing Session",
+    emoji: "🎵",
+    description: "Crank up the Bluetooth, play your couple playlist, and belt out songs together. The worse you sing, the more she'll laugh!",
+    duration: 15,
+    tips: ["Queue her fav songs beforehand on Spotify", "Include Disney duets & Ed Sheeran", "Record a funny video if she's comfortable", "Prepare a 'guess the song' game"],
+    timePreference: "any"
+  },
+  {
+    title: "Park & Heart-to-Heart",
+    emoji: "💬",
+    description: "Find a quiet spot near her place, recline the seats slightly, and just talk. About dreams, memories, silly what-ifs. No phones allowed.",
+    duration: 20,
+    tips: ["Find a quiet residential street or empty parking area", "Bring a small snack to share during the chat", "Ask deep questions — future plans, childhood memories, fears", "Hold her hand while talking"],
+    timePreference: "evening"
+  },
+  {
+    title: "Make Out & Cuddle Session",
+    emoji: "💋",
+    description: "Before saying goodbye, park somewhere private. Hold her close, tell her something specific you loved about today. Make the goodbye unforgettable.",
+    duration: 15,
+    tips: ["Find a dimly lit but safe parking spot", "Have mints ready (trust me on this one)", "Tell her one specific thing you loved about the date", "Play soft R&B in the background", "Don't rush it — let the moment breathe"],
+    timePreference: "evening"
+  },
+  {
+    title: "Scenic Night Cruise",
+    emoji: "🌃",
+    description: "Take a slightly longer scenic route back through KL's city lights. Drive slow, windows down, neon reflections everywhere. Main character energy.",
+    duration: 20,
+    tips: ["Route through KLCC / Jalan Sultan Ismail for skyline views", "Play lo-fi or chill R&B playlist", "Point out pretty buildings and lights together", "Stop at a nice viewpoint if you spot one"],
+    timePreference: "night"
+  },
+  {
+    title: "Stargazing from the Car",
+    emoji: "🌟",
+    description: "Drive to a spot with less light pollution, recline seats, and look at the sky through the windshield together. Peaceful and romantic.",
+    duration: 25,
+    tips: ["Putrajaya or Cyberjaya has less light pollution", "Download a stargazing app to identify constellations", "Bring a small blanket in case you sit outside", "Play calming ambient music softly"],
+    timePreference: "night"
+  },
+  {
+    title: "Drive-Through Snack Run",
+    emoji: "🍦",
+    description: "Hit up a McD drive-through or grab ice cream together on the way back. Simple, sweet, and gives you more time to chat in the car.",
+    duration: 15,
+    tips: ["McD McFlurry or Baskin Robbins drive-through works great", "Share one dessert for extra cuteness points", "Park and eat together in the car while talking"],
+    timePreference: "any"
+  }
+];
 
+// What activity slots to fill based on time & duration
+function getActivityOrder(startTime, dateType) {
+  const orders = {
+    morning: {
+      quick: ["meal"],
+      short: ["meal", "activity"],
+      half: ["meal", "activity", "walk_or_shop", "dessert"],
+      full: ["meal", "activity", "walk_or_shop", "meal2", "activity2", "dessert"]
+    },
+    afternoon: {
+      quick: ["meal"],
+      short: ["meal", "activity"],
+      half: ["meal", "activity", "dessert_or_cafe", "walk_or_shop"],
+      full: ["meal", "activity", "walk_or_shop", "dessert_or_cafe", "meal2"]
+    },
+    evening: {
+      quick: ["meal"],
+      short: ["meal", "activity"],
+      half: ["meal", "activity", "dessert_or_cafe"],
+      full: ["activity", "meal", "dessert_or_cafe", "walk_or_shop"]
+    },
+    night: {
+      quick: ["meal"],
+      short: ["meal", "activity"],
+      half: ["meal", "activity", "dessert"],
+      full: ["meal", "activity", "dessert", "walk_or_shop"]
+    }
+  };
+  return orders[startTime]?.[dateType] || ["meal", "activity"];
+}
+
+// Map each slot to acceptable venue types
+const SLOT_TO_TYPES = {
+  meal: ["restaurant", "cafe"],
+  meal2: ["restaurant", "cafe"],
+  activity: ["movie", "entertainment", "outdoor", "art"],
+  activity2: ["entertainment", "outdoor", "art"],
+  walk_or_shop: ["shopping", "outdoor"],
+  dessert: ["cafe"],
+  dessert_or_cafe: ["cafe"],
+  dessert_or_drinks: ["cafe"],
+  walk: ["outdoor", "shopping"]
+};
+
+function getSlotLabel(slot) {
+  const labels = {
+    meal: "Meal time", meal2: "Second meal",
+    activity: "Main activity", activity2: "Bonus activity",
+    walk_or_shop: "Walk around & explore", dessert: "Dessert break",
+    dessert_or_cafe: "Cafe / Dessert stop", dessert_or_drinks: "Drinks / Dessert",
+    walk: "Walk & chill"
+  };
+  return labels[slot] || "Activity";
+}
+
+function getTypeEmoji(type) {
+  return { cafe: "☕", restaurant: "🍽️", movie: "🎬", outdoor: "🌿", entertainment: "🎮", shopping: "🛍️", art: "🎨", "night-market": "🏮", home: "🏠" }[type] || "✨";
+}
+
+function getActivityDuration(venue) {
+  return { cafe: 45, restaurant: 75, movie: 150, outdoor: 60, entertainment: 90, shopping: 60, art: 60, "night-market": 60, home: 60 }[venue.type] || 60;
+}
+
+function getTravelKey(from, to) {
+  const key1 = `${from}->${to}`;
+  const key2 = `${to}->${from}`;
+  return TRAVEL_TIMES[key1] || TRAVEL_TIMES[key2] || null;
+}
+
+// ── CORE PLANNER ────────────────────────────────────────────────────────────
+
+function generateDatePlans(options) {
+  const { dateType, budget, dayType, startTime, herMood, preferences } = options;
   const profile = getProfile();
-  const dates = getDates();
   const venuePerf = getVenuePerformance();
   const learning = getLearningWeights();
-  const discovery = getDiscoveryLog();
-  const dateConfig = DATE_TYPES[dateType];
-
-  // Step 1: THINK - Filter venues based on constraints
   const thinkingLog = [];
-  thinkingLog.push({ step: "🔍 Analyzing constraints", detail: `Budget: RM${budget} | Type: ${dateConfig.label} | Day: ${dayType} | Start: ${startTime}` });
 
-  // Filter venues that are open on this day type
-  const dayName = dayType === "weekend" ? "sat" : "mon"; // simplified
-  let candidates = VENUES_DB.filter(v => {
-    const isOpen = v.daysOpen.includes(dayName) || v.daysOpen.includes("sat") || v.daysOpen.includes("sun");
-    const fitsTime = v.bestTimeSlots.includes(startTime);
-    const fitsLength = v.dateLength.some(dl => {
-      if (dateType === "quick") return dl === "short";
-      if (dateType === "short") return dl === "short" || dl === "medium";
-      if (dateType === "half") return dl === "medium" || dl === "long";
-      return true;
-    });
-    return isOpen && (fitsTime || dateType === "full") && fitsLength;
-  });
-  thinkingLog.push({ step: "📋 Found venues open & matching time", detail: `${candidates.length} venues available` });
+  thinkingLog.push({ step: "🔍 Analyzing your date", detail: `RM${budget} | ${dateType} | ${dayType} ${startTime}` });
 
-  // Step 2: Score each venue
-  const scoredVenues = candidates.map(venue => {
-    let score = 50; // base score
-    const reasons = [];
+  // Step 1: Determine natural activity flow
+  const activityOrder = getActivityOrder(startTime, dateType);
+  thinkingLog.push({ step: "📋 Planned natural flow", detail: activityOrder.map(s => s.replace(/_/g, " ")).join(" → ") });
 
-    // Profile match
-    const allLikes = [...(profile.likes.food || []), ...(profile.likes.activities || []), ...(profile.likes.aesthetic || [])].map(l => l.toLowerCase());
-    const allDislikes = [...(profile.dislikes.food || []), ...(profile.dislikes.activities || [])].map(d => d.toLowerCase());
+  // Step 2: Find hub areas that can support the whole flow
+  const hubCandidates = findHubAreas(activityOrder, dayType);
+  thinkingLog.push({ step: "📍 Found hub areas", detail: `${hubCandidates.length} areas with all needed activities` });
 
-    let likeMatches = 0;
-    let dislikeMatches = 0;
-    venue.tags.forEach(tag => {
-      const t = tag.toLowerCase();
-      if (allLikes.some(l => t.includes(l) || l.includes(t))) { likeMatches++; score += 8; }
-      if (allDislikes.some(d => t.includes(d) || d.includes(t))) { dislikeMatches++; score -= 15; }
-    });
-    if (likeMatches > 0) reasons.push(`Matches ${likeMatches} of her likes`);
-    if (dislikeMatches > 0) reasons.push(`⚠️ Touches ${dislikeMatches} dislikes`);
-
-    // Mood-based adjustments
-    if (herMood === "stressed" || herMood === "tired") {
-      if (venue.introvertFriendly) { score += 10; reasons.push("Relaxing for her current mood"); }
-      else { score -= 8; reasons.push("Might be too much energy right now"); }
-    }
-    if (herMood === "excited" && !venue.introvertFriendly) { score += 5; reasons.push("Matches her excited energy"); }
-
-    // Introvert level
-    if (profile.introvertLevel >= 7) {
-      if (venue.introvertFriendly) score += 5;
-      else score -= 5;
-    }
-
-    // Love language match
-    if (venue.loveLanguages && venue.loveLanguages.includes(profile.loveLanguage)) { score += 5; reasons.push("Matches her love language"); }
-
-    // Budget fit
-    if (venue.estimatedCost <= budget * 0.5) { score += 8; reasons.push("Very budget-friendly"); }
-    else if (venue.estimatedCost <= budget * 0.8) { score += 4; reasons.push("Within budget"); }
-    else if (venue.estimatedCost > budget) { score -= 20; reasons.push("Over budget"); }
-
-    // Travel convenience (closer to TTDI = better since you pick her up)
-    const travel = getTravelKey("ttdi", venue.area);
-    if (travel) {
-      if (travel.car <= 15) { score += 8; reasons.push("Very close, easy drive"); }
-      else if (travel.car <= 25) { score += 3; }
-      else if (travel.car > 40) { score -= 5; reasons.push("Far drive"); }
-    }
-
-    // Past performance learning
-    const perfData = venuePerf[venue.id];
-    if (perfData) {
-      const avgRating = perfData.totalHerRating / perfData.visits;
-      if (avgRating >= 8) { score += 12; reasons.push(`She loved it before! (${avgRating.toFixed(1)}/10)`); }
-      else if (avgRating >= 6) { score += 5; reasons.push(`Good past experience (${avgRating.toFixed(1)}/10)`); }
-      else if (avgRating < 4) { score -= 15; reasons.push("She didn't enjoy this before"); }
-
-      // Novelty penalty if visited recently
-      if (perfData.lastVisit) {
-        const daysSince = daysAgo(perfData.lastVisit);
-        if (daysSince < 14) { score -= 10; reasons.push("Visited recently, less novel"); }
-        else if (daysSince < 30) { score -= 3; }
-      }
-    } else {
-      // Never visited = discovery bonus
-      score += 4;
-      reasons.push("🆕 Never tried before!");
-    }
-
-    // Learning weights bonus
-    if (learning.preferredAreas[venue.area] > 7) { score += 5; reasons.push("You both love this area"); }
-    if (learning.preferredTypes[venue.type] > 7) { score += 3; }
-    (venue.vibes || []).forEach(vibe => {
-      if (learning.preferredVibes[vibe] > 7) score += 2;
-    });
-
-    // Preference keywords match
-    preferences.forEach(pref => {
-      const p = pref.toLowerCase();
-      if (venue.tags.some(t => t.toLowerCase().includes(p)) || venue.name.toLowerCase().includes(p) || venue.description.toLowerCase().includes(p)) {
-        score += 10;
-        reasons.push(`Matches your preference: "${pref}"`);
-      }
-    });
-
-    return { ...venue, _score: Math.max(0, Math.min(100, score)), _reasons: reasons };
-  });
-
-  scoredVenues.sort((a, b) => b._score - a._score);
-  thinkingLog.push({ step: "🧠 Scored all venues", detail: `Top: ${scoredVenues[0]?.name} (${scoredVenues[0]?._score}pts)` });
-
-  // Step 3: Build date itineraries
-  const plans = [];
-  const usedVenueIds = new Set();
-
-  for (let planNum = 0; planNum < 5; planNum++) {
-    const planVenues = [];
-    let planBudget = 0;
-    let planTravelTime = 0;
-    const maxVenues = dateConfig.maxVenues;
-
-    // Pick primary venue (highest scored unused)
-    const primary = scoredVenues.find(v => !usedVenueIds.has(v.id) && v.estimatedCost <= budget && v._score > 20);
-    if (!primary) continue;
-
-    planVenues.push(primary);
-    usedVenueIds.add(primary.id);
-    planBudget += primary.estimatedCost;
-
-    // Pick secondary venues if date type allows
-    if (maxVenues >= 2 && planBudget < budget * 0.7) {
-      // Find a complementary venue nearby
-      const secondary = scoredVenues.find(v =>
-        !usedVenueIds.has(v.id) &&
-        v.id !== primary.id &&
-        v.type !== primary.type &&
-        (planBudget + v.estimatedCost) <= budget &&
-        v._score > 15
-      );
-      if (secondary) {
-        planVenues.push(secondary);
-        usedVenueIds.delete(secondary.id); // Allow reuse across plans
-        planBudget += secondary.estimatedCost;
-      }
-    }
-
-    if (maxVenues >= 3 && planBudget < budget * 0.5 && planVenues.length === 2) {
-      const tertiary = scoredVenues.find(v =>
-        !planVenues.some(pv => pv.id === v.id) &&
-        (planBudget + v.estimatedCost) <= budget &&
-        v.type !== planVenues[0].type && v.type !== planVenues[1].type &&
-        v._score > 10
-      );
-      if (tertiary) {
-        planVenues.push(tertiary);
-        planBudget += tertiary.estimatedCost;
-      }
-    }
-
-    // Calculate route: You (SK) -> Her (TTDI) -> Venue1 -> Venue2 -> ... -> Her (TTDI) -> You (SK)
-    const routeAreas = ["seri-kembangan", "ttdi", ...planVenues.map(v => v.area), "ttdi", "seri-kembangan"];
-    const routeDetails = calculateRouteDetails(routeAreas, dayType, startTime);
-
-    // Calculate total time
-    const activityMinutes = planVenues.reduce((sum, v) => {
-      if (v.type === "cafe" || v.type === "home") return sum + 60;
-      if (v.type === "restaurant") return sum + 90;
-      if (v.type === "movie") return sum + 150;
-      if (v.type === "outdoor") return sum + 90;
-      if (v.type === "entertainment") return sum + 120;
-      if (v.type === "shopping") return sum + 120;
-      return sum + 75;
-    }, 0);
-
-    const totalMinutes = routeDetails.totalMinutes + activityMinutes;
-    const totalCost = planBudget + routeDetails.totalFuelCost;
-    const fatigue = calculateFatigue(routeDetails.totalMinutes, activityMinutes, planVenues.length);
-
-    // Build human-readable itinerary
-    const itinerary = [];
-    let currentTime = startTime === "morning" ? 480 : startTime === "afternoon" ? 720 : startTime === "evening" ? 1080 : 1260;
-
-    // Pickup
-    const pickupTravel = estimateTravelTime("seri-kembangan", "ttdi", dayType, startTime);
-    itinerary.push({ time: formatTimeFromMinutes(currentTime), action: "🚗 Leave from Seri Kembangan", detail: `Drive to TTDI to pick her up (~${pickupTravel.minutes} min, ${pickupTravel.distance}km)`, duration: pickupTravel.minutes });
-    currentTime += pickupTravel.minutes;
-    itinerary.push({ time: formatTimeFromMinutes(currentTime), action: "💕 Pick up from TTDI", detail: "Meet at her place", duration: 5 });
-    currentTime += 5;
-
-    planVenues.forEach((venue, i) => {
-      const prev = i === 0 ? "ttdi" : planVenues[i-1].area;
-      const travelToVenue = estimateTravelTime(prev, venue.area, dayType, startTime);
-      if (travelToVenue.minutes > 5) {
-        itinerary.push({ time: formatTimeFromMinutes(currentTime), action: `🚗 Drive to ${venue.area.replace(/-/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}`, detail: `~${travelToVenue.minutes} min drive`, duration: travelToVenue.minutes });
-        currentTime += travelToVenue.minutes;
-      }
-      const actTime = venue.type === "restaurant" ? 90 : venue.type === "movie" ? 150 : venue.type === "entertainment" ? 120 : venue.type === "outdoor" ? 90 : 60;
-      const emoji = venue.type === "cafe" ? "☕" : venue.type === "restaurant" ? "🍽️" : venue.type === "movie" ? "🎬" : venue.type === "outdoor" ? "🌿" : venue.type === "entertainment" ? "🎮" : venue.type === "shopping" ? "🛍️" : venue.type === "art" ? "🎨" : "✨";
-      itinerary.push({ time: formatTimeFromMinutes(currentTime), action: `${emoji} ${venue.name}`, detail: `${venue.description} (~${actTime} min, ~RM${venue.estimatedCost})`, duration: actTime, venueId: venue.id });
-      currentTime += actTime;
-    });
-
-    // Drive back
-    const lastVenueArea = planVenues[planVenues.length - 1].area;
-    const returnTravel = estimateTravelTime(lastVenueArea, "ttdi", dayType, "evening");
-    itinerary.push({ time: formatTimeFromMinutes(currentTime), action: "🚗 Drive back to TTDI", detail: `Drop her off (~${returnTravel.minutes} min)`, duration: returnTravel.minutes });
-    currentTime += returnTravel.minutes;
-    itinerary.push({ time: formatTimeFromMinutes(currentTime), action: "💝 Drop off & goodnight", detail: "End the date on a sweet note", duration: 5 });
-    currentTime += 5;
-    const homeTravel = estimateTravelTime("ttdi", "seri-kembangan", dayType, "night");
-    itinerary.push({ time: formatTimeFromMinutes(currentTime), action: "🏠 Drive home", detail: `Back to Seri Kembangan (~${homeTravel.minutes} min)`, duration: homeTravel.minutes });
-
-    // Build plan theme
-    const theme = generatePlanTheme(planVenues);
-
-    const plan = {
-      id: generateId("plan"),
-      theme,
-      venues: planVenues.map(v => ({ id: v.id, name: v.name, area: v.area, type: v.type, cost: v.estimatedCost, score: v._score, reasons: v._reasons })),
-      itinerary,
-      route: routeAreas,
-      routeDetails,
-      budget: { food: planBudget, transport: routeDetails.totalFuelCost, total: totalCost },
-      time: { travel: routeDetails.totalMinutes, activity: activityMinutes, total: totalMinutes },
-      distance: routeDetails.totalDistance,
-      fatigue,
-      dateType,
-      overallScore: Math.round(planVenues.reduce((s, v) => s + v._score, 0) / planVenues.length)
-    };
-    plans.push(plan);
+  // Step 3: Score each hub based on preferences, travel, past dates
+  const scoredHubs = hubCandidates.map(hub =>
+    scoreHub(hub, profile, venuePerf, learning, budget, preferences, herMood)
+  );
+  scoredHubs.sort((a, b) => b.score - a.score);
+  if (scoredHubs.length > 0) {
+    thinkingLog.push({ step: "🧠 Top area pick", detail: `${scoredHubs[0].hubName} (score: ${scoredHubs[0].score})` });
   }
 
-  thinkingLog.push({ step: "📝 Generated date plans", detail: `${plans.length} unique plans created` });
-  plans.sort((a, b) => b.overallScore - a.overallScore);
+  // Step 4: Build full date plans from the best hubs
+  const plans = [];
+  const usedAreas = new Set();
 
+  for (const hub of scoredHubs.slice(0, 10)) {
+    if (usedAreas.has(hub.mainArea)) continue;
+    usedAreas.add(hub.mainArea);
+
+    const plan = buildPlanFromHub(hub, activityOrder, profile, venuePerf, budget, dayType, startTime, herMood, preferences, dateType);
+    if (plan) plans.push(plan);
+    if (plans.length >= 5) break;
+  }
+
+  thinkingLog.push({ step: "📝 Plans generated", detail: `${plans.length} natural date flows ready` });
+  thinkingLog.push({ step: "💝 Adding car moments", detail: "Singing sessions, heart-to-hearts & sweet goodbyes included" });
+
+  plans.sort((a, b) => b.overallScore - a.overallScore);
   return { plans, thinkingLog };
 }
 
-function generatePlanTheme(venues) {
-  const types = venues.map(v => v.type);
-  const vibes = venues.flatMap(v => v.vibes || []);
+function findHubAreas(activityOrder, dayType) {
+  const dayName = dayType === "weekend" ? "sat" : "mon";
 
-  if (vibes.includes("romantic") && vibes.includes("nature")) return "🌿 Romantic Nature Escape";
-  if (vibes.includes("luxurious") || vibes.includes("upscale")) return "✨ Fancy Date Night";
-  if (vibes.includes("adventure") || vibes.includes("active")) return "🏃 Adventure Date";
-  if (types.includes("cafe") && types.includes("outdoor")) return "☕ Cafe & Chill Walk";
-  if (types.every(t => t === "cafe")) return "☕ Cafe Hopping";
-  if (types.includes("movie")) return "🎬 Movie Date";
-  if (types.includes("restaurant") && types.length === 1) return "🍽️ Dinner Date";
-  if (vibes.includes("cozy") || vibes.includes("intimate")) return "🫶 Cozy & Intimate";
-  if (vibes.includes("fun") || vibes.includes("exciting")) return "🎉 Fun Day Out";
-  if (vibes.includes("aesthetic") || vibes.includes("artsy")) return "🎨 Aesthetic Date";
-  if (types.includes("home")) return "🏠 Stay-in Date";
-  return "💕 Sweet Date Plan";
+  // Group all venues by their walkable area cluster
+  const areaVenues = {};
+  VENUES_DB.forEach(v => {
+    const isOpen = v.daysOpen.includes(dayName) || (dayType === "weekend" && (v.daysOpen.includes("sat") || v.daysOpen.includes("sun")));
+    if (!isOpen) return;
+
+    const cluster = NEARBY_AREAS[v.area] || [v.area];
+    cluster.forEach(hubKey => {
+      if (!areaVenues[hubKey]) areaVenues[hubKey] = [];
+      if (!areaVenues[hubKey].find(x => x.id === v.id)) {
+        areaVenues[hubKey].push(v);
+      }
+    });
+    // Always add to own area
+    if (!areaVenues[v.area]) areaVenues[v.area] = [];
+    if (!areaVenues[v.area].find(x => x.id === v.id)) {
+      areaVenues[v.area].push(v);
+    }
+  });
+
+  // Check which areas can satisfy all activity slots
+  const hubs = [];
+  for (const [area, venues] of Object.entries(areaVenues)) {
+    const availableTypes = new Set(venues.map(v => v.type));
+
+    let canSatisfy = true;
+    for (const slot of activityOrder) {
+      const neededTypes = SLOT_TO_TYPES[slot];
+      if (!neededTypes) continue;
+      if (!neededTypes.some(t => availableTypes.has(t))) { canSatisfy = false; break; }
+    }
+
+    if (canSatisfy && venues.length >= activityOrder.length) {
+      hubs.push({
+        mainArea: area,
+        hubName: area.replace(/-/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
+        venues,
+        types: availableTypes,
+        diversity: availableTypes.size
+      });
+    }
+  }
+  return hubs;
 }
 
-function formatTimeFromMinutes(totalMinutes) {
-  const hours = Math.floor(totalMinutes / 60) % 24;
-  const mins = totalMinutes % 60;
-  const period = hours >= 12 ? "PM" : "AM";
-  const h = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
-  return `${h}:${String(mins).padStart(2,'0')} ${period}`;
+function scoreHub(hub, profile, venuePerf, learning, budget, preferences, herMood) {
+  let score = 50;
+  const reasons = [];
+  const allLikes = [...(profile.likes.food || []), ...(profile.likes.activities || []), ...(profile.likes.aesthetic || [])].map(l => l.toLowerCase());
+
+  // Travel convenience from TTDI
+  const travel = getTravelKey("ttdi", hub.mainArea);
+  if (travel) {
+    if (travel.car <= 12) { score += 15; reasons.push("Very close to her place — minimal driving!"); }
+    else if (travel.car <= 20) { score += 8; reasons.push("Easy drive from TTDI"); }
+    else if (travel.car <= 30) { score += 3; }
+    else if (travel.car > 45) { score -= 10; reasons.push("Long drive — might be tiring"); }
+  }
+
+  // How well venues match her likes
+  let likeMatches = 0;
+  hub.venues.forEach(v => {
+    v.tags.forEach(tag => {
+      if (allLikes.some(l => tag.toLowerCase().includes(l) || l.includes(tag.toLowerCase()))) likeMatches++;
+    });
+  });
+  score += Math.min(20, likeMatches * 2);
+  if (likeMatches >= 5) reasons.push("Lots of things she loves here");
+
+  // Area diversity
+  if (hub.diversity >= 4) { score += 8; reasons.push("Great variety — food, fun, shopping all in one spot"); }
+  else if (hub.diversity >= 3) { score += 4; reasons.push("Good mix of activities"); }
+
+  // Past performance in this area
+  hub.venues.forEach(v => {
+    const perf = venuePerf[v.id];
+    if (perf && perf.visits > 0) {
+      const avg = perf.totalHerRating / perf.visits;
+      if (avg >= 8) { score += 3; }
+      else if (avg < 4) { score -= 2; }
+    }
+  });
+
+  // Mood match
+  if (herMood === "stressed" || herMood === "tired") {
+    const hasQuiet = hub.venues.some(v => v.introvertFriendly);
+    if (hasQuiet) { score += 5; reasons.push("Has relaxing spots for her mood"); }
+  }
+
+  // Learning weights
+  if (learning.preferredAreas && learning.preferredAreas[hub.mainArea] > 7) {
+    score += 8; reasons.push("You both love this area");
+  }
+
+  // User preferences match
+  preferences.forEach(pref => {
+    const p = pref.toLowerCase();
+    const m = hub.venues.filter(v =>
+      v.tags.some(t => t.toLowerCase().includes(p)) ||
+      v.name.toLowerCase().includes(p) ||
+      v.description.toLowerCase().includes(p)
+    );
+    if (m.length > 0) { score += 10; reasons.push(`Has "${pref}" options`); }
+  });
+
+  // Budget check — area average cost
+  const avgCost = hub.venues.reduce((s, v) => s + v.estimatedCost, 0) / hub.venues.length;
+  if (avgCost <= budget * 0.2) { score += 5; reasons.push("Very budget-friendly area"); }
+
+  return { ...hub, score: Math.max(0, Math.min(100, score)), reasons };
+}
+
+function buildPlanFromHub(hub, activityOrder, profile, venuePerf, budget, dayType, startTime, herMood, preferences, dateType) {
+  const planVenues = [];
+  let planBudget = 0;
+  const usedIds = new Set();
+  const allLikes = [...(profile.likes.food || []), ...(profile.likes.activities || []), ...(profile.likes.aesthetic || [])].map(l => l.toLowerCase());
+  const allDislikes = [...(profile.dislikes.food || []), ...(profile.dislikes.activities || [])].map(d => d.toLowerCase());
+
+  for (const slot of activityOrder) {
+    const neededTypes = SLOT_TO_TYPES[slot];
+    if (!neededTypes) continue;
+
+    let candidates = hub.venues.filter(v =>
+      neededTypes.includes(v.type) && !usedIds.has(v.id) && (planBudget + v.estimatedCost) <= budget * 1.15
+    );
+    if (candidates.length === 0) continue;
+
+    candidates = candidates.map(v => {
+      let s = 50;
+      v.tags.forEach(tag => {
+        const t = tag.toLowerCase();
+        if (allLikes.some(l => t.includes(l) || l.includes(t))) s += 8;
+        if (allDislikes.some(d => t.includes(d) || d.includes(t))) s -= 15;
+      });
+      if (herMood === "stressed" && v.introvertFriendly) s += 10;
+      if (herMood === "excited" && !v.introvertFriendly) s += 5;
+      if (profile.introvertLevel >= 7 && v.introvertFriendly) s += 5;
+      if (v.loveLanguages && v.loveLanguages.includes(profile.loveLanguage)) s += 5;
+
+      const perf = venuePerf[v.id];
+      if (perf && perf.visits > 0) {
+        const avg = perf.totalHerRating / perf.visits;
+        if (avg >= 8) s += 12;
+        else if (avg >= 6) s += 5;
+        else if (avg < 4) s -= 15;
+        if (perf.lastVisit && daysAgo(perf.lastVisit) < 14) s -= 10;
+      } else {
+        s += 4;
+      }
+
+      preferences.forEach(pref => {
+        const p = pref.toLowerCase();
+        if (v.tags.some(t => t.toLowerCase().includes(p)) || v.name.toLowerCase().includes(p)) s += 10;
+      });
+
+      return { ...v, _slotScore: s };
+    });
+
+    candidates.sort((a, b) => b._slotScore - a._slotScore);
+    const picked = candidates[0];
+    if (picked) {
+      planVenues.push({ ...picked, _slot: slot });
+      usedIds.add(picked.id);
+      planBudget += picked.estimatedCost;
+    }
+  }
+
+  if (planVenues.length < 2) return null;
+
+  // Build itinerary
+  const itinerary = [];
+  let currentTime = startTime === "morning" ? 480 : startTime === "afternoon" ? 720 : startTime === "evening" ? 1080 : 1260;
+
+  // Pickup
+  const pickupTravel = estimateTravelTime("seri-kembangan", "ttdi", dayType, startTime);
+  itinerary.push({ time: formatTimeFromMinutes(currentTime), action: "🚗 Leave from Seri Kembangan", detail: `Head to TTDI to pick her up (~${pickupTravel.minutes} min)`, duration: pickupTravel.minutes, type: "travel" });
+  currentTime += pickupTravel.minutes;
+
+  itinerary.push({ time: formatTimeFromMinutes(currentTime), action: "💕 Pick her up from TTDI", detail: "Greet her with a smile — maybe bring her a drink or small snack you prepared", duration: 5, type: "moment" });
+  currentTime += 5;
+
+  // Drive to hub
+  const hubTravel = estimateTravelTime("ttdi", hub.mainArea, dayType, startTime);
+  if (hubTravel.minutes > 5) {
+    itinerary.push({ time: formatTimeFromMinutes(currentTime), action: `🚗 Drive to ${hub.hubName}`, detail: `Chat and vibe on the way (~${hubTravel.minutes} min, ${hubTravel.distance}km)`, duration: hubTravel.minutes, type: "travel" });
+    currentTime += hubTravel.minutes;
+  }
+
+  // Activities at the hub
+  planVenues.forEach((venue, i) => {
+    if (i > 0) {
+      itinerary.push({ time: formatTimeFromMinutes(currentTime), action: "🚶 Walk over", detail: `Short stroll to ${venue.name} (~5 min)`, duration: 5, type: "transition" });
+      currentTime += 5;
+    }
+    const slotLabel = getSlotLabel(venue._slot);
+    const actTime = getActivityDuration(venue);
+    const emoji = getTypeEmoji(venue.type);
+    itinerary.push({ time: formatTimeFromMinutes(currentTime), action: `${emoji} ${venue.name}`, detail: `${slotLabel} — ${venue.description} (~${actTime} min, ~RM${venue.estimatedCost})`, duration: actTime, venueId: venue.id, type: "activity" });
+    currentTime += actTime;
+  });
+
+  // Drive back + car moments
+  const returnTravel = estimateTravelTime(hub.mainArea, "ttdi", dayType, "evening");
+
+  itinerary.push({ time: formatTimeFromMinutes(currentTime), action: "🚗 Head back toward her place", detail: `Start driving back to TTDI (~${returnTravel.minutes} min)`, duration: returnTravel.minutes, type: "travel" });
+  currentTime += returnTravel.minutes;
+
+  // Pick car moments
+  const carMomentsPicked = pickCarMoments(startTime, currentTime);
+  carMomentsPicked.forEach(cm => {
+    itinerary.push({ time: formatTimeFromMinutes(currentTime), action: `${cm.emoji} ${cm.title}`, detail: cm.description, duration: cm.duration, type: "car_moment", tips: cm.tips });
+    currentTime += cm.duration;
+  });
+
+  // Sweet goodbye
+  itinerary.push({ time: formatTimeFromMinutes(currentTime), action: "💝 Sweet goodbye at her place", detail: "Walk her to her door, hug tight, tell her you had an amazing time. Kiss goodnight 💋", duration: 10, type: "moment" });
+  currentTime += 10;
+
+  // Drive home
+  const homeTravel = estimateTravelTime("ttdi", "seri-kembangan", dayType, "night");
+  itinerary.push({ time: formatTimeFromMinutes(currentTime), action: "🏠 Drive home", detail: `Back to Seri Kembangan (~${homeTravel.minutes} min). Text her 'reached home safely' 📱`, duration: homeTravel.minutes, type: "travel" });
+
+  // Totals
+  const activityMinutes = planVenues.reduce((sum, v) => sum + getActivityDuration(v), 0);
+  const travelMinutes = pickupTravel.minutes + (hubTravel.minutes || 0) + returnTravel.minutes + homeTravel.minutes;
+  const carMomentMinutes = carMomentsPicked.reduce((s, m) => s + m.duration, 0);
+  const walkMinutes = Math.max(0, (planVenues.length - 1) * 5);
+  const totalMinutes = travelMinutes + activityMinutes + carMomentMinutes + walkMinutes + 15;
+  const totalDistance = (pickupTravel.distance || 0) + (hubTravel.distance || 0) + (returnTravel.distance || 0) + (homeTravel.distance || 0);
+  const fuelCost = Math.round(totalDistance * FUEL_COST_PER_KM);
+  const totalCost = planBudget + fuelCost;
+  const fatigue = calculateFatigue(travelMinutes, activityMinutes, 1);
+
+  const theme = generatePlanTheme(planVenues, hub.hubName);
+
+  return {
+    id: generateId("plan"),
+    theme,
+    hubArea: hub.hubName,
+    venues: planVenues.map(v => ({
+      id: v.id, name: v.name, area: v.area, type: v.type,
+      cost: v.estimatedCost, score: v._slotScore, slot: v._slot,
+      reasons: getVenueReasons(v, profile, venuePerf, preferences)
+    })),
+    itinerary,
+    carMoments: carMomentsPicked.map(m => m.title),
+    route: ["seri-kembangan", "ttdi", hub.mainArea, "ttdi", "seri-kembangan"],
+    budget: { food: planBudget, transport: fuelCost, total: totalCost },
+    time: { travel: travelMinutes, activity: activityMinutes, carMoments: carMomentMinutes, total: totalMinutes },
+    distance: totalDistance,
+    fatigue,
+    dateType,
+    overallScore: Math.round(planVenues.reduce((s, v) => s + v._slotScore, 0) / planVenues.length)
+  };
+}
+
+function pickCarMoments(startTime, currentTimeMinutes) {
+  const timeOfDay = currentTimeMinutes >= 1260 ? "night" : currentTimeMinutes >= 1080 ? "evening" : "afternoon";
+  const moments = [...CAR_MOMENTS];
+
+  // Shuffle for variety
+  for (let i = moments.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [moments[i], moments[j]] = [moments[j], moments[i]];
+  }
+
+  const picked = [];
+
+  if (timeOfDay === "night" || timeOfDay === "evening") {
+    // Romantic moments: always include make out + one more
+    const makeOut = moments.find(m => m.title.includes("Make Out"));
+    if (makeOut) picked.push(makeOut);
+    const others = moments.filter(m => !m.title.includes("Make Out") && (m.timePreference === "any" || m.timePreference === timeOfDay));
+    if (others.length > 0) picked.push(others[0]);
+  } else {
+    // Daytime: fun moments
+    const singing = moments.find(m => m.title.includes("Singing"));
+    if (singing) picked.push(singing);
+    const talk = moments.find(m => m.title.includes("Heart"));
+    if (talk) picked.push(talk);
+  }
+
+  return picked.length > 0 ? picked : [moments[0]];
+}
+
+function getVenueReasons(venue, profile, venuePerf, preferences) {
+  const reasons = [];
+  const allLikes = [...(profile.likes.food || []), ...(profile.likes.activities || []), ...(profile.likes.aesthetic || [])].map(l => l.toLowerCase());
+
+  let likeMatches = 0;
+  venue.tags.forEach(tag => {
+    if (allLikes.some(l => tag.toLowerCase().includes(l) || l.includes(tag.toLowerCase()))) likeMatches++;
+  });
+  if (likeMatches > 0) reasons.push(`Matches ${likeMatches} of her likes`);
+
+  const perf = venuePerf[venue.id];
+  if (perf && perf.visits > 0) {
+    const avg = (perf.totalHerRating / perf.visits).toFixed(1);
+    if (avg >= 8) reasons.push("She loved it last time! (" + avg + "/10)");
+    else if (avg >= 6) reasons.push("Good past experience (" + avg + "/10)");
+  } else {
+    reasons.push("New spot to explore together!");
+  }
+
+  if (venue.introvertFriendly && profile.introvertLevel >= 7) reasons.push("Quiet & comfortable for her");
+  if (venue.loveLanguages && venue.loveLanguages.includes(profile.loveLanguage)) reasons.push("Matches her love language");
+
+  preferences.forEach(pref => {
+    if (venue.tags.some(t => t.toLowerCase().includes(pref.toLowerCase())) || venue.name.toLowerCase().includes(pref.toLowerCase())) {
+      reasons.push('You wanted: "' + pref + '"');
+    }
+  });
+
+  return reasons;
+}
+
+function generatePlanTheme(venues, hubName) {
+  const types = venues.map(v => v.type);
+  const area = hubName || "the area";
+
+  if (types.includes("movie") && types.includes("restaurant")) return "🎬 Dinner & Movie at " + area;
+  if (types.includes("movie") && types.includes("cafe")) return "🎬 Movie & Cafe Day at " + area;
+  if (types.includes("movie")) return "🎬 Movie Date at " + area;
+  if (types.includes("entertainment") && types.includes("restaurant")) return "🎮 Fun & Food at " + area;
+  if (types.includes("outdoor") && types.includes("cafe")) return "🌿 Nature & Cafe Vibes at " + area;
+  if (types.includes("outdoor")) return "🌿 Outdoor Day at " + area;
+  if (types.includes("art")) return "🎨 Artsy Date at " + area;
+  if (types.includes("shopping") && types.includes("restaurant")) return "🛍️ Eat, Shop & Chill at " + area;
+  if (types.includes("cafe") && types.length <= 2) return "☕ Cozy Cafe Date at " + area;
+  if (types.includes("restaurant") && types.includes("shopping")) return "🍽️ Dine & Explore at " + area;
+  return "💕 Day Out at " + area;
+}
+
+function formatTimeFromMinutes(minutes) {
+  let h = Math.floor(minutes / 60) % 24;
+  const m = minutes % 60;
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return h + ":" + String(m).padStart(2, "0") + " " + ampm;
+}
+
+function daysAgo(dateString) {
+  if (!dateString) return Infinity;
+  const diff = Date.now() - new Date(dateString).getTime();
+  return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
 
@@ -823,92 +1090,468 @@ function getRankedSuggestions() {
 }
 
 
-// ── Surprise Generator ───────────────────────────────────────────────────────
+// ── Elaborate Surprise Generator ──────────────────────────────────────────────
 
-const SURPRISE_ACTIVITIES = [
-  { text: "Take her for a surprise bubble tea run 🧋", tags: ["bubble-tea", "sweet", "spontaneous"], cost: 15 },
-  { text: "Bring her favorite food unannounced 🍜", tags: ["food", "surprise", "thoughtful"], cost: 25 },
-  { text: "Plan a secret sunset drive to Desa Park City 🌅", tags: ["driving", "sunset", "romantic"], cost: 10 },
-  { text: "Surprise matcha cafe visit at Niko Neko 🍵", tags: ["matcha", "cafe", "aesthetic"], cost: 40 },
-  { text: "Pack a surprise picnic at KLCC Park 🧺", tags: ["picnic", "outdoor", "romantic"], cost: 30 },
-  { text: "Book a surprise pottery class together 🏺", tags: ["creative", "hands-on", "unique"], cost: 90 },
-  { text: "Take her stargazing at Putrajaya Lake 🌟", tags: ["romantic", "night", "stars"], cost: 5 },
-  { text: "Surprise spa day booking at Hammam Spa 💆", tags: ["spa", "pampering", "luxury"], cost: 140 },
-  { text: "Spontaneous bookstore trip to BookXcess 📚", tags: ["books", "quiet", "thoughtful"], cost: 30 },
-  { text: "Night drive through KL with city lights 🌃", tags: ["driving", "night", "romantic"], cost: 10 },
-  { text: "Bring a home-cooked meal to her place 🍳", tags: ["cooking", "homemade", "acts"], cost: 20 },
-  { text: "Surprise dessert delivery from her fav spot 🍰", tags: ["desserts", "sweet", "surprise"], cost: 25 },
-  { text: "Take her to a new cafe she hasn't tried ☕", tags: ["cafe", "discovery", "adventure"], cost: 35 },
-  { text: "Buy her a book from her wish list and leave it at her door 📖", tags: ["books", "gifts", "thoughtful"], cost: 40 }
+const SURPRISE_PLANS = [
+  {
+    title: "Sunset Picnic Surprise",
+    emoji: "🌅",
+    theme: "romantic",
+    description: "Set up a beautiful picnic by the lake at Desa Park City during golden hour. She thinks it's just a walk, but you've prepared everything.",
+    location: "Desa Park City Central Park or Taman Tasik Titiwangsa",
+    bestTime: "5:00 PM - 7:00 PM",
+    duration: "~2.5 hours",
+    budgetRange: { min: 50, max: 100 },
+    whatToBring: [
+      "Aesthetic picnic mat/blanket (Shopee ~RM20-30)",
+      "Her favourite snacks + drinks",
+      "Sandwiches or sushi from a nice deli (or homemade!)",
+      "Bluetooth speaker (soft music playlist ready)",
+      "Battery-powered fairy lights/LED candles (~RM15)",
+      "Small bouquet of flowers",
+      "Wet wipes, napkins, plastic bags for cleanup",
+      "Insect repellent spray",
+      "Power bank + phone for photos"
+    ],
+    setupSteps: [
+      "1. Buy and prep everything the day before",
+      "2. Arrive 30 min early to set up near the lake/park",
+      "3. Lay out blanket, arrange food aesthetically",
+      "4. Place fairy lights/candles around the setup",
+      "5. Put flowers where she'll sit",
+      "6. Queue up a romantic playlist (Lo-fi / Ed Sheeran / her favs)",
+      "7. Text her: 'Picking you up in 20 min, dress comfy'"
+    ],
+    surpriseMoment: "When you arrive at the park, tell her you want to 'show her something.' Guide her to the spot. When she sees the setup, have your phone ready to capture her reaction! Then sit down, pour her a drink, and enjoy the sunset together.",
+    giftIdeas: [
+      { item: "Handwritten letter about your favourite memories together", cost: 0, whereToBuy: "Write it yourself the night before" },
+      { item: "Custom photo album (Photobook app / Lalaland)", cost: 35, whereToBuy: "Photobook.com.my or Lalaland app" },
+      { item: "A small potted succulent in a cute pot", cost: 20, whereToBuy: "Any plant nursery or Shopee" },
+      { item: "Matching couple bracelets", cost: 30, whereToBuy: "Shopee / Pandora outlet if budget allows" }
+    ],
+    proTips: [
+      "Check weather forecast 2 days before! Have backup indoor plan",
+      "Arrive early to claim a good lakeside spot (weekends get busy)",
+      "Take photos of the setup before she arrives",
+      "Bring extra food — appetite in the open air is real",
+      "If she loves IG, set up a cute angle for her to take photos"
+    ],
+    tags: ["romantic", "outdoor", "sunset", "picnic", "aesthetic"]
+  },
+  {
+    title: "Secret Karaoke Room Party",
+    emoji: "🎤",
+    theme: "fun",
+    description: "Tell her you're going for dinner. But secretly, you've booked and decorated a private karaoke room with balloons and her favourite snacks.",
+    location: "Neway Karaoke (Bukit Bintang / 1 Utama / Mid Valley)",
+    bestTime: "7:00 PM - 10:00 PM",
+    duration: "~3 hours",
+    budgetRange: { min: 80, max: 150 },
+    whatToBring: [
+      "Small helium balloons (party shop ~RM15-20 for a set)",
+      "Her favourite candy/chocolate/snacks",
+      "A cute card with lyrics from 'your song'",
+      "Extra phone charger",
+      "A surprise gift (see ideas below)",
+      "List of duet songs you want to sing together"
+    ],
+    setupSteps: [
+      "1. Book the karaoke room 1-2 days in advance (call ahead)",
+      "2. Tell them you want to arrive early to 'set up' the room",
+      "3. Arrive 20 min early with the balloons and decorations",
+      "4. Arrange balloons, scatter some candy on the table",
+      "5. Place the card on the mic stand or her seat",
+      "6. Pre-select her favourite songs in the system queue",
+      "7. Pick her up and go to 'dinner' first at a nearby restaurant"
+    ],
+    surpriseMoment: "After dinner, say 'I have one more stop tonight.' Walk her to the karaoke place. When you open the door to the decorated room, watch her jaw drop! Start with 'your song' as the first track.",
+    giftIdeas: [
+      { item: "Custom Spotify code keychain/plaque of 'your song'", cost: 25, whereToBuy: "Shopee — search 'custom Spotify code'" },
+      { item: "Matching couple phone cases", cost: 40, whereToBuy: "Shopee or CASETiFY" },
+      { item: "Wireless earbuds (for when she misses your singing)", cost: 60, whereToBuy: "Shopee / any electronics store" }
+    ],
+    proTips: [
+      "Include her ALL-TIME fav songs, not just current hits",
+      "Don't hog the mic — take turns!",
+      "Record at least one duet video together",
+      "Order drinks/food from the karaoke menu too — karaoke makes you hungry",
+      "End with a slow romantic song dedicated to her"
+    ],
+    tags: ["fun", "music", "karaoke", "surprise", "celebration", "indoor"]
+  },
+  {
+    title: "Home-Cooked Dinner Date",
+    emoji: "👨‍🍳",
+    theme: "intimate",
+    description: "Cook her favourite meal at your place (or hers if her family's out). Candlelight, good music, and effort that shows you really care.",
+    location: "Your place or her place (when family is away)",
+    bestTime: "6:00 PM - 10:00 PM",
+    duration: "~3-4 hours",
+    budgetRange: { min: 40, max: 80 },
+    whatToBring: [
+      "All ingredients for the meal (buy fresh on the day)",
+      "Candles (tea lights are safest, ~RM10 for a pack)",
+      "Nice plates/bowls (if yours are basic, get some from Daiso ~RM12)",
+      "A small tablecloth or placemat",
+      "Bluetooth speaker",
+      "Fresh flowers for the table",
+      "Dessert (bakery cake or homemade brownies)",
+      "A handwritten menu card (cute touch!)"
+    ],
+    setupSteps: [
+      "1. Plan the menu 2-3 days ahead. Keep it simple but impressive (pasta/steak/Korean BBQ)",
+      "2. Practice cooking it once if you're not confident!",
+      "3. Buy fresh ingredients on the morning of the date",
+      "4. Start cooking 1.5 hours before she arrives",
+      "5. Set up the dining area: tablecloth, candles, flowers, dim lights",
+      "6. Write a cute handwritten menu card (name the dishes funny things)",
+      "7. Queue up dinner playlist: jazz or lo-fi",
+      "8. Change into something nice before she arrives"
+    ],
+    surpriseMoment: "When she walks in and sees the candlelit setup with you in an apron saying 'Welcome to Chez Nash, table for two?', she'll melt. Present the handwritten menu dramatically like a waiter.",
+    giftIdeas: [
+      { item: "A jar of handwritten 'reasons I love you' notes", cost: 5, whereToBuy: "DIY — mason jar from Daiso + coloured paper" },
+      { item: "Matching couple mugs for future morning coffees", cost: 25, whereToBuy: "Shopee / Typo" },
+      { item: "Her favourite perfume/body mist", cost: 40, whereToBuy: "Sephora / Watson's" }
+    ],
+    proTips: [
+      "PRACTICE the recipe beforehand! First attempt should not be on date night",
+      "Keep the menu to 2-3 courses max (starter, main, dessert)",
+      "Clean as you cook — nobody wants a messy kitchen",
+      "Have a backup delivery app ready just in case 😅",
+      "Ask about food allergies/restrictions beforehand (obviously)",
+      "After dinner: do dishes together → it's actually a cute bonding moment"
+    ],
+    tags: ["intimate", "cooking", "home", "romantic", "effort", "indoor"]
+  },
+  {
+    title: "Surprise Movie Marathon",
+    emoji: "🎬",
+    theme: "cozy",
+    description: "Transform your living room into a mini cinema with projector/laptop, fairy lights, blanket fort, and all her comfort snacks.",
+    location: "Your place",
+    bestTime: "4:00 PM - 11:00 PM",
+    duration: "~5-6 hours",
+    budgetRange: { min: 30, max: 60 },
+    whatToBring: [
+      "Laptop or projector (borrow/rent one if needed)",
+      "White bedsheet as screen (if using projector)",
+      "Fairy lights & LED strip lights for ambiance",
+      "ALL the blankets and pillows you own",
+      "Her favourite movie snacks: popcorn, chocolate, drinks",
+      "Printed 'movie tickets' with the films listed",
+      "A cozy oversized hoodie for her to wear"
+    ],
+    setupSteps: [
+      "1. Clean your room/living area thoroughly!",
+      "2. Build a blanket fort or cozy nest with pillows",
+      "3. String up fairy lights around the viewing area",
+      "4. Set up the screen/laptop at a good viewing angle",
+      "5. Prepare snack station: bowls of popcorn, candy, drinks",
+      "6. Print cute 'movie tickets' (design on Canva for free)",
+      "7. Download her fav movies in advance (no buffering!)",
+      "8. Dim all other lights for cinema vibes"
+    ],
+    surpriseMoment: "Pick her up and say 'we're going to the cinema.' But instead, drive home. When she sees the transformed room, give her the printed ticket and the hoodie. Let her pick the first movie!",
+    giftIdeas: [
+      { item: "Matching couple pyjama set", cost: 35, whereToBuy: "Shopee / Cotton On" },
+      { item: "A custom blanket with your photos printed", cost: 50, whereToBuy: "Printcious.com or Shopee" },
+      { item: "Her favourite movie on Blu-ray/special edition", cost: 30, whereToBuy: "Shopee / MPH" }
+    ],
+    proTips: [
+      "Let her choose at least half the movies",
+      "Include one movie she's been wanting to watch but hasn't yet",
+      "Intermission break between movies — stretch, refill snacks, bathroom",
+      "No phones during the movie (both of you!)",
+      "Cuddle. That's the real point of this whole thing."
+    ],
+    tags: ["cozy", "indoor", "movies", "blanket-fort", "relaxed"]
+  },
+  {
+    title: "Surprise Adventure Day Trip",
+    emoji: "🚗",
+    theme: "adventurous",
+    description: "Tell her to pack a bag and not ask questions. Take her on a surprise day trip to somewhere beautiful she hasn't been.",
+    location: "Janda Baik / Sekinchan / Kuala Selangor / Broga Hill",
+    bestTime: "7:00 AM (leave early!)",
+    duration: "Full day ~8-10 hours",
+    budgetRange: { min: 80, max: 200 },
+    whatToBring: [
+      "Full tank of petrol + RM50 cash for tolls/parking",
+      "Packed breakfast sandwiches & drinks for the drive",
+      "Sunscreen & insect repellent",
+      "Extra clothes for her (in case it gets dirty/wet)",
+      "Portable phone charger",
+      "Umbrella (Malaysian weather is unpredictable!)",
+      "Camera or phone with space for photos",
+      "A curated road trip playlist",
+      "Wet wipes, tissue, hand sanitizer",
+      "Surprise gift to give at a scenic viewpoint"
+    ],
+    setupSteps: [
+      "1. Research the destination 3-4 days ahead (check if anything is closed)",
+      "2. Plan rest stops and meals along the way",
+      "3. Download offline maps (signal can be bad in rural areas!)",
+      "4. Pack everything in the car the night before",
+      "5. Prepare breakfast for the car ride",
+      "6. Tell her the night before: 'Be ready by 7 AM, wear comfy clothes, don't ask why'",
+      "7. Pick her up with breakfast ready in the car"
+    ],
+    surpriseMoment: "When she gets in the car and asks 'Where are we going?', just smile and say 'You'll see.' Play her favourite road trip songs. The surprise unfolds with every kilometer as the scenery changes. Give her the gift at the most scenic spot.",
+    giftIdeas: [
+      { item: "Polaroid camera to capture the day (rent or buy)", cost: 60, whereToBuy: "Shopee (Instax Mini) or rent from camera shops" },
+      { item: "Matching adventure couple T-shirts", cost: 30, whereToBuy: "Uniqlo / Shopee" },
+      { item: "A scratch-off travel map of Malaysia", cost: 25, whereToBuy: "Shopee / Typo" }
+    ],
+    proTips: [
+      "Check road conditions and weather forecast!",
+      "Have a backup nearby destination in case of bad weather",
+      "Stop at interesting roadside stalls — that's part of the fun",
+      "Let her DJ the playlist sometimes",
+      "Take lots of photos — candids are the best ones",
+      "Plan to be back before dark unless she's comfortable with night driving"
+    ],
+    tags: ["adventure", "road-trip", "nature", "outdoor", "day-trip"]
+  },
+  {
+    title: "Scrapbook & Letters Date",
+    emoji: "📖",
+    theme: "sentimental",
+    description: "Prepare a handmade scrapbook or love letter collection and present it during a cozy cafe date. Maximum emotional damage (the good kind).",
+    location: "Any cozy quiet cafe (Lisette's TTDI, Niko Neko, or a bookstore cafe)",
+    bestTime: "3:00 PM - 6:00 PM",
+    duration: "~2-3 hours",
+    budgetRange: { min: 30, max: 60 },
+    whatToBring: [
+      "The completed scrapbook/letter collection",
+      "Printed photos of your favourite moments together",
+      "Stickers, washi tape, markers (in case she wants to add to it)",
+      "A nice pen for her to write back to you",
+      "Tissue packets (there WILL be happy tears)",
+      "A small gift box to present it in"
+    ],
+    setupSteps: [
+      "1. Start making the scrapbook 1-2 weeks before",
+      "2. Print your best couple photos (at least 15-20)",
+      "3. Write captions and memories for each photo",
+      "4. Add love letters between the pages — things you've never said",
+      "5. Decorate with stickers and washi tape",
+      "6. Leave empty pages at the back 'for memories we haven't made yet'",
+      "7. Put it in a nice gift box/bag"
+    ],
+    surpriseMoment: "After ordering drinks at the cafe, casually pull out the gift box and say 'I made something for you.' Watch her face as she flips through each page. Have tissues ready. This will make her cry happy tears guaranteed.",
+    giftIdeas: [
+      { item: "The scrapbook itself IS the gift — it's priceless", cost: 15, whereToBuy: "DIY — scrapbook from Popular/Kinokuniya + Shopee supplies" },
+      { item: "A piece of jewellery she's been eyeing", cost: 50, whereToBuy: "Pandora / Shopee / her favourite brand" },
+      { item: "A star map of the night sky on your anniversary/first date", cost: 30, whereToBuy: "Shopee — search 'custom star map'" }
+    ],
+    proTips: [
+      "Start early! Good scrapbooks take time and thought",
+      "Include inside jokes and references only you two understand",
+      "Use nice handwriting (or print if your writing is messy)",
+      "Add some silly/ugly photos too — not just perfect ones",
+      "The effort matters more than how 'artsy' it looks"
+    ],
+    tags: ["sentimental", "creative", "diy", "letters", "heartfelt"]
+  },
+  {
+    title: "Fairy Light Rooftop Night",
+    emoji: "✨",
+    theme: "romantic",
+    description: "Find a rooftop or balcony, string up fairy lights, bring cushions and set up a magical nighttime hangout spot under the stars.",
+    location: "Your apartment rooftop / balcony / Heli Lounge Bar KL (for the view)",
+    bestTime: "8:00 PM - 11:00 PM",
+    duration: "~3 hours",
+    budgetRange: { min: 40, max: 80 },
+    whatToBring: [
+      "Fairy lights (at least 2-3 strings, battery-powered ~RM30)",
+      "Cushions and a blanket",
+      "Bluetooth speaker",
+      "Wine/drinks + cheese/charcuterie board or pizza",
+      "LED candles for ambiance",
+      "A Polaroid camera or phone with timer for couple selfies",
+      "Bug spray (you're outdoors!)"
+    ],
+    setupSteps: [
+      "1. Scout the rooftop/balcony area beforehand (check access!)",
+      "2. String fairy lights along railings, walls, or overhead",
+      "3. Lay out cushions and blanket to create a cozy corner",
+      "4. Set up the food/drinks station nearby",
+      "5. Light the LED candles",
+      "6. Test the speaker and queue up a stargazing/chill playlist",
+      "7. Pick her up and bring her up blindfolded (if safe!)"
+    ],
+    surpriseMoment: "Lead her up to the rooftop with her eyes closed. When she opens them and sees the fairy light paradise you created — with the city skyline as backdrop — she'll be speechless. Dance together under the lights.",
+    giftIdeas: [
+      { item: "A constellation necklace (her zodiac sign)", cost: 35, whereToBuy: "Shopee / Pandora" },
+      { item: "A 'reasons I love you' jar with 52 notes (one for each week)", cost: 10, whereToBuy: "DIY — Daiso mason jar + coloured paper" },
+      { item: "A couple's experience voucher (spa/pottery class)", cost: 60, whereToBuy: "Fave app / Klook" }
+    ],
+    proTips: [
+      "Check that you have rooftop access and it's safe!",
+      "Set everything up before picking her up",
+      "Have mosquito repellent — don't let bugs ruin the moment",
+      "Play her favourite slow songs and ask her to dance",
+      "Take candid photos of her reaction"
+    ],
+    tags: ["romantic", "rooftop", "fairy-lights", "night", "aesthetic", "outdoor"]
+  },
+  {
+    title: "Surprise Spa & Pamper Day",
+    emoji: "💆",
+    theme: "relaxing",
+    description: "Book a couple's spa treatment or set up a DIY spa at home. Perfect when she's been stressed or working hard.",
+    location: "Hammam Spa (Bangsar) / UR SPA (Mid Valley) / DIY at home",
+    bestTime: "2:00 PM - 6:00 PM",
+    duration: "~3-4 hours",
+    budgetRange: { min: 50, max: 200 },
+    whatToBring: [
+      "Spa booking confirmation (if going to a spa)",
+      "For DIY: face masks, bath bombs, essential oils (~RM40 total from Watson's)",
+      "Fluffy towels and bathrobes",
+      "Cucumber slices (classic!)",
+      "Relaxing music playlist",
+      "Her favourite herbal tea",
+      "A comfy outfit for after the spa",
+      "Moisturizer and skincare stuff"
+    ],
+    setupSteps: [
+      "1. Option A: Book a couple's spa package 3-5 days ahead",
+      "2. Option B (DIY): Buy supplies from Watson's/Guardian",
+      "3. For DIY: Clean the bathroom/bedroom thoroughly",
+      "4. Set up ambient lighting (candles, dim lights)",
+      "5. Prepare warm towels (microwave damp towels for 30 sec)",
+      "6. Queue up spa music playlist (nature sounds or lo-fi)",
+      "7. Make herbal tea to have ready",
+      "8. Tell her: 'Wear something comfy, I have a surprise'"
+    ],
+    surpriseMoment: "If spa: Drive her there and check in as 'Mr. and Mrs.' to make her blush. If DIY: Transform your bathroom with candles and when she walks in, present her with a 'spa menu' of treatments you'll give her.",
+    giftIdeas: [
+      { item: "A luxury skincare set (her favourite brand)", cost: 60, whereToBuy: "Sephora / Watson's / Guardian" },
+      { item: "Silk pillowcase (great for skin + hair)", cost: 30, whereToBuy: "Shopee / Blissy" },
+      { item: "A cute matching bathrobe set", cost: 50, whereToBuy: "Shopee / Muji" }
+    ],
+    proTips: [
+      "If she's been stressed, this is THE perfect surprise",
+      "For DIY: watch a YouTube tutorial on how to give a basic massage",
+      "Have snacks ready for after the spa (fruit platter works great)",
+      "Take turns pampering each other if doing DIY",
+      "Don't skimp on the towels — cold wet towels ruin the vibe"
+    ],
+    tags: ["relaxing", "spa", "pamper", "self-care", "stress-relief"]
+  }
 ];
 
-const SURPRISE_GIFTS = [
-  { text: "Customized phone case with your couple photo 📱", tags: ["tech", "photos", "personal"], cost: 40 },
-  { text: "A handwritten love letter in a nice envelope 💌", tags: ["writing", "romantic", "personal"], cost: 5 },
-  { text: "Her favorite snacks in a cute basket 🎀", tags: ["food", "cute", "thoughtful"], cost: 30 },
-  { text: "A small succulent plant for her room 🪴", tags: ["nature", "cute", "aesthetic"], cost: 20 },
-  { text: "Matching keychains or bracelets 🔑", tags: ["matching", "cute", "accessories"], cost: 25 },
-  { text: "A cozy blanket for movie nights 🧣", tags: ["cozy", "home", "comfort"], cost: 40 },
-  { text: "Photo collage of your memories together 📸", tags: ["photos", "memories", "personal"], cost: 15 },
-  { text: "A matcha kit for her to make at home 🍵", tags: ["matcha", "foodie", "unique"], cost: 50 },
-  { text: "Flowers from a local florist 🌸", tags: ["flowers", "romantic", "classic"], cost: 30 },
-  { text: "A journal or planner she'd love 📓", tags: ["stationery", "thoughtful", "practical"], cost: 25 },
-  { text: "Surprise concert/event tickets 🎫", tags: ["events", "music", "exciting"], cost: 100 },
-  { text: "Scented candle in her favorite fragrance 🕯️", tags: ["candles", "cozy", "aesthetic"], cost: 35 }
+// Gift idea categories for the gift suggestions part of surprises
+const SURPRISE_GIFT_CATEGORIES = [
+  {
+    category: "Sentimental & Handmade",
+    gifts: [
+      { item: "Handwritten love letter collection (12 letters, one for each month)", cost: 0, effort: "high" },
+      { item: "Custom photo book of your journey together", cost: 35, effort: "medium" },
+      { item: "Mason jar with 365 reasons I love you", cost: 15, effort: "high" },
+      { item: "Scrapbook with tickets, photos, and memories", cost: 20, effort: "high" },
+      { item: "Custom star map of a special date (first date/anniversary)", cost: 30, effort: "low" },
+      { item: "A video montage of your best moments together", cost: 0, effort: "medium" }
+    ]
+  },
+  {
+    category: "Wearable & Accessories",
+    gifts: [
+      { item: "Matching couple bracelets (simple & elegant)", cost: 30, effort: "low" },
+      { item: "Constellation necklace (her zodiac)", cost: 35, effort: "low" },
+      { item: "A watch she's been eyeing", cost: 100, effort: "low" },
+      { item: "Custom name/initial ring", cost: 40, effort: "low" },
+      { item: "Silk scrunchie set in her fav colours", cost: 20, effort: "low" }
+    ]
+  },
+  {
+    category: "Experience Gifts",
+    gifts: [
+      { item: "Couple pottery class voucher", cost: 60, effort: "low" },
+      { item: "Cooking class together", cost: 80, effort: "low" },
+      { item: "Spa/massage voucher for two", cost: 100, effort: "low" },
+      { item: "Escape room booking", cost: 50, effort: "low" },
+      { item: "Art jamming session for two", cost: 60, effort: "low" }
+    ]
+  },
+  {
+    category: "Tech & Practical",
+    gifts: [
+      { item: "Wireless earbuds in her favourite colour", cost: 60, effort: "low" },
+      { item: "Kindle Paperwhite (if she reads)", cost: 150, effort: "low" },
+      { item: "Cute portable fan for hot Malaysian days", cost: 25, effort: "low" },
+      { item: "Custom phone case with your couple photo", cost: 25, effort: "low" }
+    ]
+  },
+  {
+    category: "Sweet & Edible",
+    gifts: [
+      { item: "Custom cake with a personal message", cost: 50, effort: "medium" },
+      { item: "Chocolate bouquet (handmade)", cost: 30, effort: "medium" },
+      { item: "Her favourite boba subscription (weekly order for a month)", cost: 60, effort: "low" },
+      { item: "Homemade cookies/brownies in a cute jar", cost: 15, effort: "high" }
+    ]
+  }
 ];
 
 function generateSurprise() {
   const profile = getProfile();
+  const dates = getDates();
+  const venuePerf = getVenuePerformance();
+
+  // Filter surprise plans by what matches her profile
   const allLikes = [...(profile.likes.food || []), ...(profile.likes.activities || []), ...(profile.likes.aesthetic || [])].map(l => l.toLowerCase());
-  const hasProfile = allLikes.length > 0;
+  const introvertLevel = profile.introvertLevel || 5;
 
-  let activities = SURPRISE_ACTIVITIES.map(a => {
-    let score = 0;
-    if (hasProfile) {
-      for (const tag of a.tags) {
-        for (const like of allLikes) {
-          if (tag.toLowerCase().includes(like) || like.includes(tag.toLowerCase())) { score++; break; }
-        }
+  // Score each plan
+  const scoredPlans = SURPRISE_PLANS.map(plan => {
+    let score = 50;
+    const matchReasons = [];
+
+    plan.tags.forEach(tag => {
+      if (allLikes.some(l => tag.includes(l) || l.includes(tag))) {
+        score += 8;
+        matchReasons.push(tag);
       }
-    }
-    return { ...a, _score: score };
+    });
+
+    if (introvertLevel >= 7 && (plan.theme === "cozy" || plan.theme === "intimate")) score += 10;
+    if (introvertLevel <= 3 && (plan.theme === "fun" || plan.theme === "adventurous")) score += 10;
+    if (introvertLevel >= 7 && plan.theme === "adventurous") score -= 5;
+
+    // Check if the surprise involves any venue she loved
+    plan.tags.forEach(tag => {
+      Object.entries(venuePerf).forEach(([vid, perf]) => {
+        if (perf.visits > 0 && perf.totalHerRating / perf.visits >= 8) score += 2;
+      });
+    });
+
+    // Variety — avoid repeating themes from recent dates
+    const recentThemes = dates.slice(0, 5).map(d => (d.notes || "").toLowerCase());
+    if (recentThemes.some(t => plan.tags.some(tag => t.includes(tag)))) score -= 5;
+
+    return { ...plan, _score: score, _matchReasons: matchReasons };
   });
 
-  let gifts = SURPRISE_GIFTS.map(g => {
-    let score = 0;
-    if (hasProfile) {
-      for (const tag of g.tags) {
-        for (const like of allLikes) {
-          if (tag.toLowerCase().includes(like) || like.includes(tag.toLowerCase())) { score++; break; }
-        }
-      }
-    }
-    return { ...g, _score: score };
-  });
+  scoredPlans.sort((a, b) => b._score - a._score);
 
-  activities.sort((a, b) => b._score - a._score);
-  gifts.sort((a, b) => b._score - a._score);
+  // Pick from top 3 with some randomness
+  const topPlans = scoredPlans.slice(0, 3);
+  const picked = topPlans[Math.floor(Math.random() * topPlans.length)];
 
-  let pickedActivity, pickedGift;
-  if (hasProfile && activities[0]._score > 0) {
-    const topA = activities.filter(a => a._score === activities[0]._score);
-    pickedActivity = topA[Math.floor(Math.random() * topA.length)];
-  } else {
-    pickedActivity = activities[Math.floor(Math.random() * activities.length)];
-  }
-  if (hasProfile && gifts[0]._score > 0) {
-    const topG = gifts.filter(g => g._score === gifts[0]._score);
-    pickedGift = topG[Math.floor(Math.random() * topG.length)];
-  } else {
-    pickedGift = gifts[Math.floor(Math.random() * gifts.length)];
-  }
+  // Pick gift suggestions from categories
+  const giftCategory = SURPRISE_GIFT_CATEGORIES[Math.floor(Math.random() * SURPRISE_GIFT_CATEGORIES.length)];
 
   return {
-    activity: pickedActivity,
-    gift: pickedGift,
-    message: hasProfile ? "✨ Based on what she loves" : "✨ Random surprise (add her profile for personalized ones)"
+    plan: picked,
+    bonusGiftCategory: giftCategory,
+    message: picked._matchReasons.length > 0
+      ? "Based on what she loves (" + picked._matchReasons.slice(0, 3).join(", ") + "), here's a surprise she'll adore:"
+      : "Here's a surprise idea to sweep her off her feet:"
   };
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SECTION 6: UI HELPERS
@@ -926,11 +1569,7 @@ function formatCurrency(amount) {
   const b = getBudget();
   return `${b.currency || "RM"} ${parseFloat(amount || 0).toFixed(2)}`;
 }
-function daysAgo(dateStr) {
-  if (!dateStr) return 999;
-  const d = new Date(dateStr + "T00:00:00");
-  return Math.floor((new Date() - d) / 86400000);
-}
+
 function daysUntil(dateStr) {
   if (!dateStr) return 999;
   const d = new Date(dateStr + "T00:00:00");
@@ -1246,69 +1885,75 @@ function runDatePlanner() {
 }
 
 function renderGeneratedPlans() {
-  const resultArea = document.getElementById("planner-results");
+  var resultArea = document.getElementById("planner-results");
   if (currentPlans.length === 0) {
-    resultArea.innerHTML = `<div class="empty-state"><p>🤔 Couldn't generate plans with these constraints. Try adjusting the budget or date type!</p></div>`;
+    resultArea.innerHTML = '<div class="empty-state"><p>Could not generate plans with these constraints. Try adjusting the budget, date length, or area!</p></div>';
     return;
   }
 
-  resultArea.innerHTML = `<h3 style="margin-bottom:16px">💡 ${currentPlans.length} Date Plans Generated</h3>` +
-    currentPlans.map((plan, idx) => `
-      <div class="date-plan-card ${idx === 0 ? 'recommended' : ''}">
-        <div class="plan-header">
-          <div>
-            <h4>${plan.theme}</h4>
-            ${idx === 0 ? '<span class="badge badge-primary">⭐ Top Pick</span>' : ''}
-            <span class="badge badge-score">Score: ${plan.overallScore}/100</span>
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="tryDatePlan(${idx})">🎯 Try This Date</button>
-        </div>
-
-        <div class="plan-stats">
-          <div class="plan-stat"><span class="plan-stat-icon">💰</span><span>RM ${plan.budget.total}</span><span class="plan-stat-label">Total Cost</span></div>
-          <div class="plan-stat"><span class="plan-stat-icon">⏱️</span><span>${Math.round(plan.time.total / 60 * 10) / 10} hrs</span><span class="plan-stat-label">Total Time</span></div>
-          <div class="plan-stat"><span class="plan-stat-icon">🚗</span><span>${plan.distance} km</span><span class="plan-stat-label">Driving</span></div>
-          <div class="plan-stat"><span class="plan-stat-icon">😴</span><span>${plan.fatigue}/10</span><span class="plan-stat-label">Fatigue</span></div>
-        </div>
-
-        <div class="plan-venues">
-          ${plan.venues.map(v => `
-            <div class="plan-venue-chip">
-              <strong>${escapeHTML(v.name)}</strong>
-              <span class="badge">${v.area.replace(/-/g,' ')}</span>
-              <span style="color:var(--text-secondary)">~RM${v.cost}</span>
-            </div>
-          `).join('')}
-        </div>
-
-        <details class="plan-itinerary-toggle">
-          <summary>📋 View Full Itinerary</summary>
-          <div class="plan-itinerary">
-            ${plan.itinerary.map(item => `
-              <div class="itinerary-item">
-                <span class="itinerary-time">${item.time}</span>
-                <div class="itinerary-content">
-                  <strong>${item.action}</strong>
-                  <span>${item.detail}</span>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        </details>
-
-        <details class="plan-reasoning-toggle">
-          <summary>🧠 Why This Plan</summary>
-          <div class="plan-reasoning">
-            ${plan.venues.map(v => `
-              <div class="venue-reasoning">
-                <strong>${escapeHTML(v.name)}</strong>
-                <ul>${v.reasons.map(r => `<li>${r}</li>`).join('')}</ul>
-              </div>
-            `).join('')}
-          </div>
-        </details>
-      </div>
-    `).join('');
+  resultArea.innerHTML = '<h3 style="margin-bottom:16px">' + currentPlans.length + ' Natural Date Flows Generated</h3>' +
+    currentPlans.map(function(plan, idx) {
+      return [
+        '<div class="date-plan-card ' + (idx === 0 ? "recommended" : "") + '">',
+        '  <div class="plan-header">',
+        '    <div>',
+        '      <h4>' + plan.theme + '</h4>',
+        (idx === 0 ? '<span class="badge badge-primary">Top Pick</span>' : ''),
+        '      <span class="badge badge-score">Score: ' + plan.overallScore + '/100</span>',
+        '      <span class="badge badge-travel">' + plan.hubArea + '</span>',
+        '    </div>',
+        '    <button class="btn btn-primary btn-sm" onclick="tryDatePlan(' + idx + ')">Try This Date</button>',
+        '  </div>',
+        '',
+        '  <div class="plan-stats">',
+        '    <div class="plan-stat"><span class="plan-stat-icon">💰</span><span>RM ' + plan.budget.total + '</span><span class="plan-stat-label">Total Cost</span></div>',
+        '    <div class="plan-stat"><span class="plan-stat-icon">⏱️</span><span>' + (Math.round(plan.time.total / 60 * 10) / 10) + ' hrs</span><span class="plan-stat-label">Total Time</span></div>',
+        '    <div class="plan-stat"><span class="plan-stat-icon">🚗</span><span>' + plan.distance + ' km</span><span class="plan-stat-label">Driving</span></div>',
+        '    <div class="plan-stat"><span class="plan-stat-icon">😴</span><span>' + plan.fatigue + '/10</span><span class="plan-stat-label">Fatigue</span></div>',
+        '  </div>',
+        '',
+        '  <div class="plan-flow-summary" style="margin-bottom:12px;padding:12px;background:#fef8fa;border-radius:8px">',
+        '    <strong style="color:var(--primary-dark);font-size:0.85rem">The Flow:</strong>',
+        '    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center">',
+        '      <span class="badge">🚗 Pick up</span>',
+        '      <span style="color:var(--text-light)">→</span>',
+        '      <span class="badge badge-travel">📍 ' + plan.hubArea + '</span>',
+        '      <span style="color:var(--text-light)">→</span>',
+                plan.venues.map(function(v) { return '<span class="badge badge-type">' + getTypeEmoji(v.type) + ' ' + escapeHTML(v.name) + '</span>'; }).join('<span style="color:var(--text-light)">→</span>'),
+        '      <span style="color:var(--text-light)">→</span>',
+                (plan.carMoments || []).map(function(cm) { return '<span class="badge" style="background:#fff3e0;color:#e65100">' + cm + '</span>'; }).join(''),
+        '      <span style="color:var(--text-light)">→</span>',
+        '      <span class="badge">💝 Sweet goodbye</span>',
+        '    </div>',
+        '  </div>',
+        '',
+        '  <details class="plan-itinerary-toggle">',
+        '    <summary>View Full Itinerary</summary>',
+        '    <div class="plan-itinerary">',
+              plan.itinerary.map(function(item) {
+                var extraClass = item.type === "car_moment" ? ' style="background:#fff8e1;border-left:3px solid #ff9800;padding-left:12px;margin-left:-4px"' : item.type === "moment" ? ' style="background:#fce4ec;border-left:3px solid var(--primary);padding-left:12px;margin-left:-4px"' : "";
+                var tipsHtml = (item.tips && item.tips.length > 0) ? '<div style="margin-top:6px;font-size:0.8rem;color:var(--text-secondary)"><strong>Tips:</strong><ul style="margin:4px 0 0 16px">' + item.tips.map(function(t) { return '<li>' + t + '</li>'; }).join('') + '</ul></div>' : '';
+                return '<div class="itinerary-item"' + extraClass + '>' +
+                  '<span class="itinerary-time">' + item.time + '</span>' +
+                  '<div class="itinerary-content"><strong>' + item.action + '</strong><span>' + item.detail + '</span>' + tipsHtml + '</div>' +
+                  '</div>';
+              }).join(''),
+        '    </div>',
+        '  </details>',
+        '',
+        '  <details class="plan-reasoning-toggle" style="margin-top:4px">',
+        '    <summary>Why these picks?</summary>',
+        '    <div class="plan-reasoning">',
+              plan.venues.map(function(v) {
+                return '<div class="venue-reasoning"><strong>' + getTypeEmoji(v.type) + ' ' + escapeHTML(v.name) + '</strong>' +
+                  (v.reasons && v.reasons.length > 0 ? '<ul>' + v.reasons.map(function(r) { return '<li>' + r + '</li>'; }).join('') + '</ul>' : '<ul><li>Good fit for your date</li></ul>') +
+                  '</div>';
+              }).join(''),
+        '    </div>',
+        '  </details>',
+        '</div>'
+      ].join('\n');
+    }).join('');
 }
 
 function tryDatePlan(planIndex) {
@@ -1600,37 +2245,136 @@ function openAddDateModal() {
 // Suggestions (Enhanced)
 // ══════════════════════════════════════════════════════════════════════════════
 
+function openVisitRatingModal(venueId) {
+  const venue = VENUES_DB.find(v => v.id === venueId);
+  if (!venue) return;
+
+  const perf = getVenuePerformance();
+  const existing = perf[venueId];
+
+  const html = [
+    '<div style="text-align:center;margin-bottom:16px">',
+    '<span style="font-size:2rem">' + getTypeEmoji(venue.type) + '</span>',
+    '<h4 style="margin-top:8px">' + escapeHTML(venue.name) + '</h4>',
+    '<span class="badge">' + venue.area.replace(/-/g, " ") + '</span>',
+    '</div>',
+    '<div class="form-group">',
+    '<label>Your Rating (1-10)</label>',
+    '<input type="range" id="modal-visit-your-rating" min="1" max="10" value="' + (existing ? Math.round(existing.totalYourRating / Math.max(1, existing.visits)) : 7) + '" oninput="document.getElementById(\'your-rating-val\').textContent=this.value">',
+    '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:var(--text-secondary)"><span>1 😐</span><span id="your-rating-val">' + (existing ? Math.round(existing.totalYourRating / Math.max(1, existing.visits)) : 7) + '</span><span>10 🤩</span></div>',
+    '</div>',
+    '<div class="form-group">',
+    '<label>Her Enjoyment (1-10)</label>',
+    '<input type="range" id="modal-visit-her-rating" min="1" max="10" value="' + (existing ? Math.round(existing.totalHerRating / Math.max(1, existing.visits)) : 7) + '" oninput="document.getElementById(\'her-rating-val\').textContent=this.value">',
+    '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:var(--text-secondary)"><span>1 😐</span><span id="her-rating-val">' + (existing ? Math.round(existing.totalHerRating / Math.max(1, existing.visits)) : 7) + '</span><span>10 😍</span></div>',
+    '</div>',
+    '<div class="form-group">',
+    '<label>Notes (what you did, what she liked, etc.)</label>',
+    '<textarea id="modal-visit-notes" rows="3" placeholder="e.g. She loved the matcha latte, the ambiance was 10/10, will come back!"></textarea>',
+    '</div>',
+    existing ? '<div style="background:#e8f5e9;padding:8px 12px;border-radius:8px;font-size:0.85rem;margin-bottom:8px">✅ Previously visited ' + existing.visits + ' time(s). This will add a new visit record.</div>' : ''
+  ].join('');
+
+  openModal("✅ Rate Your Visit — " + venue.name, html, function() {
+    var yourRating = parseInt(document.getElementById("modal-visit-your-rating").value) || 7;
+    var herRating = parseInt(document.getElementById("modal-visit-her-rating").value) || 7;
+    var notes = document.getElementById("modal-visit-notes").value.trim();
+
+    // Update venue performance
+    var perf = getVenuePerformance();
+    if (!perf[venueId]) {
+      perf[venueId] = { visits: 0, totalYourRating: 0, totalHerRating: 0, lastVisit: null, notes: [] };
+    }
+    perf[venueId].visits += 1;
+    perf[venueId].totalYourRating += yourRating;
+    perf[venueId].totalHerRating += herRating;
+    perf[venueId].lastVisit = new Date().toISOString().split("T")[0];
+    if (notes) perf[venueId].notes = (perf[venueId].notes || []).concat([{ date: new Date().toISOString().split("T")[0], text: notes, yourRating: yourRating, herRating: herRating }]);
+    setData("mochi_venue_performance", perf);
+
+    // Update discovery log
+    var discovery = getDiscoveryLog();
+    if (!discovery.find(function(d) { return d.venueId === venueId; })) {
+      discovery.push({ venueId: venueId, date: new Date().toISOString().split("T")[0], source: "manual" });
+      setData("mochi_discovery_log", discovery);
+    }
+
+    // Update learning weights
+    var learning = getLearningWeights();
+    // Boost area preference
+    if (!learning.preferredAreas) learning.preferredAreas = {};
+    var currentAreaScore = learning.preferredAreas[venue.area] || 5;
+    if (herRating >= 8) learning.preferredAreas[venue.area] = Math.min(10, currentAreaScore + 0.5);
+    else if (herRating <= 4) learning.preferredAreas[venue.area] = Math.max(0, currentAreaScore - 0.5);
+
+    // Boost type preference
+    if (!learning.preferredTypes) learning.preferredTypes = {};
+    var currentTypeScore = learning.preferredTypes[venue.type] || 5;
+    if (herRating >= 8) learning.preferredTypes[venue.type] = Math.min(10, currentTypeScore + 0.5);
+    else if (herRating <= 4) learning.preferredTypes[venue.type] = Math.max(0, currentTypeScore - 0.5);
+
+    setData("mochi_learning_weights", learning);
+
+    closeModal();
+    showToast("Visit recorded! The AI will learn from this 🧠");
+
+    // Refresh the current view
+    var activeSection = document.querySelector(".section.active");
+    if (activeSection) {
+      if (activeSection.id === "section-suggestions") renderSuggestions();
+      else if (activeSection.id === "section-places") renderPlaces();
+    }
+  });
+}
+
 function renderSuggestions() {
-  const ranked = getRankedSuggestions();
-  const listEl = document.getElementById("suggestions-list");
+  var scored = scoreAllVenues();
+  var perf = getVenuePerformance();
+  var listEl = document.getElementById("suggestions-list");
+  var filterType = document.getElementById("suggestion-filter");
+  var filterVal = filterType ? filterType.value : "all";
 
-  const filterType = document.getElementById("filter-type")?.value || "all";
-  const filterArea = document.getElementById("filter-area")?.value || "all";
+  var filtered = filterVal === "all" ? scored : scored.filter(function(v) { return v.type === filterVal; });
+  var top = filtered.slice(0, 20);
 
-  let filtered = ranked;
-  if (filterType !== "all") filtered = filtered.filter(s => s.type === filterType || s.category === filterType);
-  if (filterArea !== "all") filtered = filtered.filter(s => s.area === filterArea);
+  if (top.length === 0) {
+    listEl.innerHTML = '<div class="empty-state"><p>No suggestions match the current filter.</p></div>';
+    return;
+  }
 
-  listEl.innerHTML = filtered.slice(0, 20).map((s, i) => `
-    <div class="suggestion-card">
-      <div class="suggestion-card-header">
-        <div>
-          <h4>${escapeHTML(s.name)}</h4>
-          <span class="badge">${s.area ? s.area.replace(/-/g,' ') : 'General'}</span>
-          <span class="badge badge-type">${s.type}</span>
-        </div>
-        <span class="score-badge score-lg">${s.scores.total}</span>
-      </div>
-      <p class="suggestion-desc">${escapeHTML(s.description)}</p>
-      <div class="score-breakdown">
-        <span title="Like Match">💝 ${s.scores.likeMatch}</span>
-        <span title="Budget Fit">💰 ${s.scores.budgetFit}</span>
-        <span title="Past Success">📊 ${s.scores.pastSuccess}</span>
-        <span title="Novelty">🆕 ${s.scores.novelty}</span>
-      </div>
-      <div style="margin-top:8px;font-size:0.85em;color:var(--text-secondary)">~${formatCurrency(s.estimatedCost)}</div>
-    </div>
-  `).join('');
+  listEl.innerHTML = top.map(function(v) {
+    var visited = perf[v.id] && perf[v.id].visits > 0;
+    var visitCount = visited ? perf[v.id].visits : 0;
+    var avgHer = visited ? (perf[v.id].totalHerRating / perf[v.id].visits).toFixed(1) : null;
+    var visitBadge = visited
+      ? '<span class="badge" style="background:#e8f5e9;color:#2e7d32">Visited ' + visitCount + 'x' + (avgHer ? ' · Her: ' + avgHer + '/10' : '') + '</span>'
+      : '<span class="badge" style="background:#e3f2fd;color:#1565c0">New!</span>';
+
+    return [
+      '<div class="suggestion-card">',
+      '  <div class="suggestion-card-header">',
+      '    <div>',
+      '      <h4>' + escapeHTML(v.name) + '</h4>',
+      '      <span class="badge badge-type">' + v.type + '</span>',
+      '      <span class="badge">' + v.area.replace(/-/g, " ") + '</span>',
+      '      ' + visitBadge,
+      '      <span class="badge">~RM' + v.estimatedCost + '</span>',
+      '    </div>',
+      '    <div class="score-badge ' + (v._score >= 70 ? "score-high" : v._score >= 45 ? "score-mid" : "score-low") + '">' + v._score + '</div>',
+      '  </div>',
+      '  <p class="suggestion-desc">' + escapeHTML(v.description) + '</p>',
+      '  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">',
+           v.tags.slice(0, 5).map(function(t) { return '<span class="tag tag-sm">' + t + '</span>'; }).join(''),
+      '  </div>',
+      '  <div style="display:flex;gap:8px;align-items:center">',
+      '    <button class="btn btn-primary btn-sm" onclick="openVisitRatingModal(\'' + v.id + '\')">',
+           visited ? '⭐ Rate Again' : '✅ Been Here!',
+      '    </button>',
+      '    <span style="font-size:0.75rem;color:var(--text-light)">Click to log your visit & rate it</span>',
+      '  </div>',
+      '</div>'
+    ].join('\n');
+  }).join('');
 }
 
 
@@ -1815,20 +2559,89 @@ function openAddGiftModal() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function renderSurprises() {
-  const surprise = generateSurprise();
-  const el = document.getElementById('surprise-result');
-  el.innerHTML = `
-    <p class="surprise-attribution">${surprise.message}</p>
-    <div class="surprise-card">
-      <div class="surprise-icon">🎯</div>
-      <div><strong>Surprise Activity</strong><p>${escapeHTML(surprise.activity.text)}</p><span class="badge">~RM ${surprise.activity.cost}</span></div>
-    </div>
-    <div class="surprise-card">
-      <div class="surprise-icon">🎁</div>
-      <div><strong>Gift Idea</strong><p>${escapeHTML(surprise.gift.text)}</p><span class="badge">~RM ${surprise.gift.cost}</span></div>
-    </div>
-    <button class="btn btn-primary" style="margin-top:16px" onclick="renderSurprises()">🔄 Generate Another</button>
-  `;
+  var result = generateSurprise();
+  var plan = result.plan;
+  var giftCat = result.bonusGiftCategory;
+  var el = document.getElementById("surprise-result");
+
+  el.innerHTML = [
+    '<p class="surprise-attribution">' + result.message + '</p>',
+    '',
+    '<div class="surprise-plan-card" style="background:white;border-radius:16px;padding:24px;box-shadow:var(--shadow);border:2px solid var(--primary);margin-bottom:20px">',
+    '  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">',
+    '    <span style="font-size:2.5rem">' + plan.emoji + '</span>',
+    '    <div>',
+    '      <h3 style="margin-bottom:4px">' + escapeHTML(plan.title) + '</h3>',
+    '      <span class="badge badge-type">' + plan.theme + '</span>',
+    '      <span class="badge">RM' + plan.budgetRange.min + '-' + plan.budgetRange.max + '</span>',
+    '      <span class="badge badge-travel">' + plan.duration + '</span>',
+    '    </div>',
+    '  </div>',
+    '',
+    '  <p style="color:var(--text-secondary);margin-bottom:16px;font-size:0.95rem">' + escapeHTML(plan.description) + '</p>',
+    '',
+    '  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">',
+    '    <div style="padding:10px;background:#fef8fa;border-radius:8px"><strong style="font-size:0.8rem;color:var(--text-secondary)">📍 Location</strong><p style="font-size:0.9rem;margin-top:4px">' + escapeHTML(plan.location) + '</p></div>',
+    '    <div style="padding:10px;background:#fef8fa;border-radius:8px"><strong style="font-size:0.8rem;color:var(--text-secondary)">🕐 Best Time</strong><p style="font-size:0.9rem;margin-top:4px">' + escapeHTML(plan.bestTime) + '</p></div>',
+    '  </div>',
+    '',
+    '  <details style="margin-bottom:12px" open>',
+    '    <summary style="font-weight:600;color:var(--primary);cursor:pointer;padding:8px 0">🎒 What to Bring (Checklist)</summary>',
+    '    <div style="padding:8px 0">',
+          plan.whatToBring.map(function(item) {
+            return '<label style="display:flex;gap:8px;align-items:flex-start;padding:4px 0;font-size:0.9rem;cursor:pointer"><input type="checkbox" style="margin-top:3px;accent-color:var(--primary)"> ' + escapeHTML(item) + '</label>';
+          }).join(''),
+    '    </div>',
+    '  </details>',
+    '',
+    '  <details style="margin-bottom:12px">',
+    '    <summary style="font-weight:600;color:var(--primary);cursor:pointer;padding:8px 0">📋 Setup Steps</summary>',
+    '    <div style="padding:8px 0">',
+          plan.setupSteps.map(function(step) {
+            return '<div style="padding:6px 0;font-size:0.9rem;border-bottom:1px solid #f5eff2">' + escapeHTML(step) + '</div>';
+          }).join(''),
+    '    </div>',
+    '  </details>',
+    '',
+    '  <div style="background:#fff8e1;border-radius:12px;padding:16px;margin-bottom:12px;border:1px solid #ffe082">',
+    '    <strong style="color:#e65100">✨ The Surprise Moment</strong>',
+    '    <p style="margin-top:8px;font-size:0.9rem;color:var(--text)">' + escapeHTML(plan.surpriseMoment) + '</p>',
+    '  </div>',
+    '',
+    '  <details style="margin-bottom:12px">',
+    '    <summary style="font-weight:600;color:var(--primary);cursor:pointer;padding:8px 0">🎁 Gift Ideas for This Surprise</summary>',
+    '    <div style="padding:8px 0">',
+          plan.giftIdeas.map(function(g) {
+            return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f5eff2">' +
+              '<div><strong style="font-size:0.9rem">' + escapeHTML(g.item) + '</strong>' +
+              (g.whereToBuy ? '<br><span style="font-size:0.8rem;color:var(--text-secondary)">Where: ' + escapeHTML(g.whereToBuy) + '</span>' : '') +
+              '</div><span class="badge">~RM' + g.cost + '</span></div>';
+          }).join(''),
+    '    </div>',
+    '  </details>',
+    '',
+    '  <details style="margin-bottom:8px">',
+    '    <summary style="font-weight:600;color:var(--primary);cursor:pointer;padding:8px 0">💡 Pro Tips</summary>',
+    '    <ul style="padding:8px 0 8px 20px;font-size:0.9rem;color:var(--text-secondary)">',
+          plan.proTips.map(function(tip) { return '<li style="padding:2px 0">' + escapeHTML(tip) + '</li>'; }).join(''),
+    '    </ul>',
+    '  </details>',
+    '</div>',
+    '',
+    '<div class="card" style="margin-bottom:16px">',
+    '  <h3>🎁 Bonus Gift Ideas: ' + escapeHTML(giftCat.category) + '</h3>',
+    '  <div style="margin-top:12px">',
+        giftCat.gifts.map(function(g) {
+          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f5eff2">' +
+            '<div style="flex:1"><strong style="font-size:0.9rem">' + escapeHTML(g.item) + '</strong>' +
+            '<br><span style="font-size:0.8rem;color:var(--text-secondary)">Effort: ' + g.effort + '</span></div>' +
+            '<span class="badge">~RM' + g.cost + '</span></div>';
+        }).join(''),
+    '  </div>',
+    '</div>',
+    '',
+    '<button class="btn btn-primary" style="margin-top:8px" onclick="renderSurprises()">🔄 Generate Another Surprise Plan</button>'
+  ].join('\n');
 }
 
 
@@ -1837,58 +2650,70 @@ function renderSurprises() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function renderReminders() {
-  const upcoming = getUpcomingReminders();
-  const listEl = document.getElementById('reminders-list');
+  var upcoming = getUpcomingReminders();
+  var listEl = document.getElementById("reminders-list");
 
   if (upcoming.length === 0) {
-    listEl.innerHTML = `<div class="empty-state"><p>No reminders set. Don't forget the important dates!</p></div>`;
+    listEl.innerHTML = '<div class="empty-state"><p>No reminders set. Add important dates so you never forget!</p></div>';
     return;
   }
 
-  listEl.innerHTML = upcoming.map(r => `
-    <div class="reminder-card ${r._daysUntil <= 3 ? 'reminder-urgent' : r._daysUntil <= 7 ? 'reminder-soon' : ''}">
-      <div style="flex:1">
-        <strong>${escapeHTML(r.label)}</strong>
-        <div style="color:var(--text-secondary);font-size:0.85em">
-          ${r._daysUntil === 0 ? '🔴 TODAY!' : r._daysUntil === 1 ? '🟠 Tomorrow' : `${r._daysUntil} days away`}
-          · ${formatDate(r.date)}
-          ${r.recurring && r.recurring !== 'none' ? `· 🔁 ${r.recurring}` : ''}
-        </div>
-      </div>
-      <button class="btn btn-sm btn-danger" data-delete-reminder="${r.id}">×</button>
-    </div>
-  `).join('');
+  listEl.innerHTML = upcoming.map(function(r) {
+    var emailBadge = r.emailReminder ? '<span class="badge" style="background:#e3f2fd;color:#1565c0">📧 Email On</span>' : '';
+    return [
+      '<div class="reminder-card ' + (r._daysUntil <= 3 ? "reminder-urgent" : r._daysUntil <= 7 ? "reminder-soon" : "") + '">',
+      '  <div style="flex:1">',
+      '    <strong>' + escapeHTML(r.label) + '</strong>',
+      '    <div style="color:var(--text-secondary);font-size:0.85em">',
+           (r._daysUntil === 0 ? "TODAY!" : r._daysUntil === 1 ? "Tomorrow" : r._daysUntil + " days away"),
+      '      &middot; ' + formatDate(r.date),
+           (r.recurring && r.recurring !== "none" ? " &middot; 🔁 " + r.recurring : ""),
+      '      ' + emailBadge,
+      '    </div>',
+      '  </div>',
+      '  <button class="btn btn-sm btn-danger" data-delete-reminder="' + r.id + '">&times;</button>',
+      '</div>'
+    ].join('\n');
+  }).join('');
 
-  listEl.querySelectorAll('[data-delete-reminder]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (confirm('Delete this reminder?')) {
+  listEl.querySelectorAll("[data-delete-reminder]").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      if (confirm("Delete this reminder?")) {
         deleteReminder(btn.dataset.deleteReminder);
         renderReminders();
-        showToast('Reminder deleted');
+        showToast("Reminder deleted");
       }
     });
   });
 }
 
 function openAddReminderModal() {
-  const html = `
-    <div class="form-group"><label>What to remember</label><input type="text" id="modal-reminder-label" placeholder="e.g. Anniversary dinner" autocomplete="off"></div>
-    <div class="form-row">
-      <div class="form-group"><label>Date</label><input type="date" id="modal-reminder-date"></div>
-      <div class="form-group"><label>Recurring</label>
-        <select id="modal-reminder-recurring"><option value="none">None</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select>
-      </div>
-    </div>
-  `;
-  openModal('🔔 Add Reminder', html, () => {
-    const label = document.getElementById('modal-reminder-label').value.trim();
-    const date = document.getElementById('modal-reminder-date').value;
-    const recurring = document.getElementById('modal-reminder-recurring').value;
-    if (!label || !date) { showToast('Please fill in all fields', 'error'); return; }
-    addReminder({ id: generateId('r'), label, date, recurring });
+  var html = [
+    '<div class="form-group"><label>What to remember</label><input type="text" id="modal-reminder-label" placeholder="e.g. Anniversary dinner" autocomplete="off"></div>',
+    '<div class="form-row">',
+    '  <div class="form-group"><label>Date</label><input type="date" id="modal-reminder-date"></div>',
+    '  <div class="form-group"><label>Recurring</label>',
+    '    <select id="modal-reminder-recurring"><option value="none">None</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select>',
+    '  </div>',
+    '</div>',
+    '<div class="form-group" style="padding:12px;background:#e3f2fd;border-radius:8px">',
+    '  <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:0">',
+    '    <input type="checkbox" id="modal-reminder-email" style="accent-color:var(--primary);width:18px;height:18px">',
+    '    <span><strong>📧 Send email reminder</strong><br><span style="font-size:0.8rem;color:var(--text-secondary)">Get notified at heyrannash@gmail.com when this is due</span></span>',
+    '  </label>',
+    '</div>'
+  ].join('');
+
+  openModal("🔔 Add Reminder", html, function() {
+    var label = document.getElementById("modal-reminder-label").value.trim();
+    var date = document.getElementById("modal-reminder-date").value;
+    var recurring = document.getElementById("modal-reminder-recurring").value;
+    var emailReminder = document.getElementById("modal-reminder-email").checked;
+    if (!label || !date) { showToast("Please fill in all fields", "error"); return; }
+    addReminder({ id: generateId("r"), label: label, date: date, recurring: recurring, emailReminder: emailReminder });
     closeModal();
     renderReminders();
-    showToast('Reminder set! 🔔');
+    showToast(emailReminder ? "Reminder set with email notification! 📧🔔" : "Reminder set! 🔔");
   });
 }
 
@@ -1898,53 +2723,82 @@ function openAddReminderModal() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function renderPlaces() {
-  const perf = getVenuePerformance();
-  const discovery = getDiscoveryLog();
-  const filterArea = document.getElementById("places-filter-area")?.value || "all";
-  const filterType = document.getElementById("places-filter-type")?.value || "all";
-  const filterStatus = document.getElementById("places-filter-status")?.value || "all";
+  var perf = getVenuePerformance();
+  var discovery = getDiscoveryLog();
+  var container = document.getElementById("places-list");
+  var filterEl = document.getElementById("places-filter-status");
+  var filterVal = filterEl ? filterEl.value : "all";
 
-  let venues = [...VENUES_DB];
-  if (filterArea !== "all") venues = venues.filter(v => v.area === filterArea);
-  if (filterType !== "all") venues = venues.filter(v => v.type === filterType);
-  if (filterStatus === "visited") venues = venues.filter(v => perf[v.id] && perf[v.id].visits > 0);
-  if (filterStatus === "unvisited") venues = venues.filter(v => !perf[v.id] || perf[v.id].visits === 0);
+  // Build place list from VENUES_DB
+  var places = VENUES_DB.map(function(v) {
+    var p = perf[v.id];
+    var visited = p && p.visits > 0;
+    var avgHer = visited ? (p.totalHerRating / p.visits).toFixed(1) : null;
+    var avgYou = visited ? (p.totalYourRating / p.visits).toFixed(1) : null;
+    return {
+      ...v,
+      _visited: visited,
+      _visits: visited ? p.visits : 0,
+      _avgHer: avgHer,
+      _avgYou: avgYou,
+      _lastVisit: visited ? p.lastVisit : null,
+      _notes: visited && p.notes ? p.notes : []
+    };
+  });
 
-  const listEl = document.getElementById("places-list");
-  const visited = Object.keys(perf).length;
+  // Filter
+  if (filterVal === "visited") places = places.filter(function(p) { return p._visited; });
+  else if (filterVal === "new") places = places.filter(function(p) { return !p._visited; });
 
-  document.getElementById("places-stats").innerHTML = `
-    <div class="stat-card"><div class="stat-icon">📍</div><div class="stat-value">${VENUES_DB.length}</div><div class="stat-label">Total Places</div></div>
-    <div class="stat-card"><div class="stat-icon">✅</div><div class="stat-value">${visited}</div><div class="stat-label">Visited</div></div>
-    <div class="stat-card"><div class="stat-icon">🆕</div><div class="stat-value">${VENUES_DB.length - visited}</div><div class="stat-label">To Explore</div></div>
-    <div class="stat-card"><div class="stat-icon">⭐</div><div class="stat-value">${getTopRatedArea()}</div><div class="stat-label">Fav Area</div></div>
-  `;
+  // Sort: visited with high ratings first, then new
+  places.sort(function(a, b) {
+    if (a._visited && !b._visited) return -1;
+    if (!a._visited && b._visited) return 1;
+    if (a._visited && b._visited) return parseFloat(b._avgHer || 0) - parseFloat(a._avgHer || 0);
+    return 0;
+  });
 
-  listEl.innerHTML = venues.map(v => {
-    const p = perf[v.id];
-    const avgRating = p ? (p.totalHerRating / p.visits).toFixed(1) : null;
-    const visitInfo = p ? `✅ Visited ${p.visits}x · Her avg: ${avgRating}/10` : '🆕 Not visited yet';
-    const travel = getTravelKey("ttdi", v.area);
-    const travelInfo = travel ? `${travel.car} min drive` : '';
+  if (places.length === 0) {
+    container.innerHTML = '<div class="empty-state"><p>No places match this filter.</p></div>';
+    return;
+  }
 
-    return `
-      <div class="place-card ${p ? 'place-visited' : 'place-new'}">
-        <div class="place-header">
-          <div>
-            <h4>${escapeHTML(v.name)}</h4>
-            <span class="badge">${v.area.replace(/-/g,' ')}</span>
-            <span class="badge badge-type">${v.type}</span>
-            ${travelInfo ? `<span class="badge badge-travel">🚗 ${travelInfo}</span>` : ''}
-          </div>
-          ${avgRating ? `<span class="score-badge ${parseFloat(avgRating) >= 8 ? 'score-high' : parseFloat(avgRating) >= 5 ? 'score-mid' : 'score-low'}">${avgRating}</span>` : ''}
-        </div>
-        <p class="suggestion-desc">${escapeHTML(v.description)}</p>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
-          <span style="font-size:0.85em;color:var(--text-secondary)">${visitInfo} · ~RM${v.estimatedCost}</span>
-          <div class="tag-list">${(v.vibes || []).map(vb => `<span class="tag tag-sm">${vb}</span>`).join('')}</div>
-        </div>
-      </div>
-    `;
+  container.innerHTML = places.slice(0, 30).map(function(v) {
+    var visitBadge = v._visited
+      ? '<span class="badge" style="background:#e8f5e9;color:#2e7d32">✅ Visited ' + v._visits + 'x</span>'
+      : '<span class="badge" style="background:#e3f2fd;color:#1565c0">🆕 Not visited yet</span>';
+
+    var ratingHtml = v._visited
+      ? '<div style="display:flex;gap:12px;font-size:0.85rem;margin-top:6px">' +
+        '<span>Your rating: <strong>' + v._avgYou + '/10</strong></span>' +
+        '<span>Her rating: <strong>' + v._avgHer + '/10</strong></span>' +
+        (v._lastVisit ? '<span style="color:var(--text-light)">Last: ' + v._lastVisit + '</span>' : '') +
+        '</div>'
+      : '';
+
+    var notesHtml = v._notes.length > 0
+      ? '<div style="margin-top:6px;font-size:0.8rem;color:var(--text-secondary);font-style:italic">"' + escapeHTML(v._notes[v._notes.length - 1].text) + '"</div>'
+      : '';
+
+    return [
+      '<div class="place-card ' + (v._visited ? "place-visited" : "place-new") + '">',
+      '  <div class="place-header">',
+      '    <div>',
+      '      <h4>' + getTypeEmoji(v.type) + ' ' + escapeHTML(v.name) + '</h4>',
+      '      <span class="badge badge-type">' + v.type + '</span>',
+      '      <span class="badge">' + v.area.replace(/-/g, " ") + '</span>',
+      '      ' + visitBadge,
+      '      <span class="badge">~RM' + v.estimatedCost + '</span>',
+      '    </div>',
+      '  </div>',
+      '  <p style="color:var(--text-secondary);font-size:0.85rem;margin-top:4px">' + escapeHTML(v.description) + '</p>',
+      ratingHtml,
+      notesHtml,
+      '  <div style="margin-top:8px">',
+      '    <button class="btn btn-primary btn-sm" onclick="openVisitRatingModal(\'' + v.id + '\')">' + (v._visited ? '⭐ Rate Again' : '✅ Been Here — Rate It!') + '</button>',
+      '  </div>',
+      '</div>'
+    ].join('\n');
   }).join('');
 }
 
